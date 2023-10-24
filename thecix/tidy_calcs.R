@@ -188,6 +188,38 @@ ggplot(x_hr) +
 #okay can see the changes in temperature better with this plot but its not obvious 
 #if there is a correlation between temp change and the denuder/overblow difference
 
-#TURNS OUT this is not the tmeperature measurement i should be using for the plot oops
+#TURNS OUT this is not the temperature measurement i should be using for the plot oops
 #redo with the correct temp stuff
 
+setwd("C:/Users/grace/Documents/Mchem_project/Calcs_and_data/Met")
+met_raw <- read_csv("C:/Users/grace/Documents/Mchem_project/Calcs_and_data/Met/THECIX_Met_Data_July24_Aug21.csv",
+                    skip = 1)
+#its finally working !!! had to restart R
+
+#this uses the SW met station measurements only
+met_sw <- met_raw[,1:7] %>%
+  mutate(date = as.POSIXct(Date,format="%Y-%m-%d %H:%M",tz ="EST" )) %>%
+  select(!Date)%>%
+  timeAverage(avg.time = "1 hour", statistic = "mean")
+#set date and tz , UTC -5 is the same as EST, Eastern Standard Time. I hope
+#timeAverage for 1 hour to match denuder/overblow averages merging with
+
+hr_temp <- left_join(hravg_clean,met_sw, by = "date") %>%
+  filter(!between(date, as.POSIXct("2023-07-31 10:00:00"),
+                  as.POSIXct("2023-07-31 18:00:00"))) %>%
+  select(!Traw)%>%
+  rename(xdiff = diff, Temp = "AirTemp_SW (ºC)") %>%
+  pivot_longer(cols = c(Temp, xdiff),
+               names_to = "var", values_to = "value")
+
+#plot as geom_line because it looks clearer than geom_point in this case
+temp_plot <-ggplot(hr_temp) + 
+  aes(x = date, y = value)+
+  labs(x = "Date", y = "", color = "", title = "Absolute difference and temperature over campaign")+
+  geom_line(aes(color = var))+
+  scale_color_manual(values = c("seagreen3","deeppink4"), labels = c("Temperature (ºC)", "Absolute difference")) +
+  theme(strip.text = element_blank())+
+  facet_wrap(~var,ncol = 1, scale = "free_y")
+
+setwd("C:/Users/grace/Documents/Mchem_project")
+ggsave(temp_plot)
