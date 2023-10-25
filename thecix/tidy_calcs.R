@@ -214,8 +214,8 @@ hr_speciesplot <-ggplot(hr_h2o,
   theme(strip.text = element_blank(), legend.title = element_blank())+
   facet_wrap(~pollutant,ncol = 1, scale = "free_y")
 
-ggsave(hr_speciesplot, filename = "C:/Users/grace/Documents/Mchem_project/species_plot.png", 
-       width = 7, height = 9)
+ggsave(hr_speciesplot, filename = "C:/Users/grace/Documents/Mchem_project/species_plot2.png", 
+       width = 10.5, height = 13.5)
 
 cut_h2o <- hrdat_clean %>% select(date, diff, ch4, h2co) %>% pivot_longer(cols = c(h2co,ch4, diff), names_to = "pollutant", values_to = "value" )
 #these species have the most similar patterns 
@@ -233,4 +233,45 @@ ch4_plot <-ggplot(cut_h2o,
 ggsave(ch4_plot, filename = "C:/Users/grace/Documents/Mchem_project/ch4_plot.png", 
        width = 6, height = 8)
 
+#total HCl plot (ValveW ==2)
 
+hcl_df <- dfAnal %>% 
+  filter(ValveW == 0| ValveW == 8|ValveW == 2) %>%
+  mutate(period = cumsum(flag !=lag(flag, default = flag[1])) ) %>%
+  filter(flag != 1) %>%
+  mutate(sector = case_when(ValveW == 8 ~ "Overblow",
+                            ValveW == 0 ~ "Denuder",
+                            ValveW == 2 ~ "Total_hcl"),)%>%
+  mutate(hour = hour(hcl_raw$ts), mins = minute(hcl_raw$ts)) %>%
+  filter(!(hour %in% c(3,6,9,12,15,18,21) & mins >= 3 & mins <=8) ) %>%
+  rename(date = ts) %>% 
+  pivot_wider(names_from = sector, values_from = hcl) %>%
+  select(date, Total_hcl, Denuder, Overblow)%>%
+  timeAverage(avg.time = "1 hour", statistic = "mean") %>%
+  mutate(diff = abs(Denuder - Overblow))
+
+hcl_plot<-ggplot(hcl_df, 
+       aes(x = date,
+           y = f_hcl)) +
+  geom_point()+ 
+  labs( x = "Date", 
+        y = "difference/ total HCl",
+        title = "Absolute difference as a fraction of total HCl")+
+  scale_x_datetime(date_breaks = "2 days", date_labels = "%b %d")+
+  theme(strip.text = element_blank())
+
+ggsave(hcl_plot, filename = "C:/Users/grace/Documents/Mchem_project/total_hcl_fraction.png")
+
+#a tad hard to see so will filter point that's massively off
+# mention to Wes
+hcl <- hcl_df %>% filter(!f_hcl >= 100)
+
+filt_hcl<-ggplot(hcl, 
+       aes(x = date,y = f_hcl)) +
+  geom_point()+ 
+  labs( x = "Date",  y = "difference/ total HCl",title = "Absolute difference as a fraction of total HCl")+
+  scale_x_datetime(date_breaks = "2 days", date_labels = "%b %d")+
+  theme(strip.text = element_blank())
+
+ggsave(filt_hcl, filename = "C:/Users/grace/Documents/Mchem_project/filt_total_hcl_fraction.png")
+                            
