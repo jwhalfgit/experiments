@@ -150,46 +150,7 @@ png("C:/Users/grace/Documents/Mchem_project/tv_didiff.png",
 diff_tv$plot$hour
 dev.off()
 
-#temperature variation
-#Next check temperature correlation of diff, need to pivot_longer Traw and diff
-#rename diff to xdiff to be able to plot temp above diff  
-#- must be a more elegant way to do this smh
-
-temp_hr <- hravg_clean %>% rename(xdiff = diff) %>%
-  pivot_longer(cols = c(Traw, xdiff),
-               names_to = "var", values_to = "value")
-
-ggplot(temp_hr) + 
-  aes(x = date, y = value)+
-  labs(x = "Date", y = "", color = "")+
-  geom_point(aes(color = var))+
-  scale_color_manual(values = c("seagreen3","deeppink4"), labels = c("Temperature (K)", "Absolute difference")) +
-  theme(strip.text = element_blank())+
-  facet_wrap(~var,ncol = 1, scale = "free_y")
-
-#think I want to filter the first day of temp measurements out because they make
-#it harder to see the changes for the rest of the campaign
-
-x_hr <-filter(hravg_clean,
-              !between(date, as.POSIXct("2023-07-31 10:00:00"),
-                       as.POSIXct("2023-07-31 18:00:00"))) %>%
-  rename(xdiff = diff) %>%
-  pivot_longer(cols = c(Traw, xdiff),
-               names_to = "var", values_to = "value")
-
-ggplot(x_hr) + 
-  aes(x = date, y = value)+
-  labs(x = "Date", y = "", color = "")+
-  geom_point(aes(color = var))+
-  scale_color_manual(values = c("seagreen3","deeppink4"), labels = c("Temperature (K)", "Absolute difference")) +
-  theme(strip.text = element_blank())+
-  facet_wrap(~var,ncol = 1, scale = "free_y")
-
-#okay can see the changes in temperature better with this plot but its not obvious 
-#if there is a correlation between temp change and the denuder/overblow difference
-
-#TURNS OUT this is not the temperature measurement i should be using for the plot oops
-#redo with the correct temp stuff
+#(correct)temperature variation (NOT Traw)
 
 setwd("C:/Users/grace/Documents/Mchem_project/Calcs_and_data/Met")
 met_raw <- read_csv("C:/Users/grace/Documents/Mchem_project/Calcs_and_data/Met/THECIX_Met_Data_July24_Aug21.csv",
@@ -222,4 +183,54 @@ temp_plot <-ggplot(hr_temp) +
   facet_wrap(~var,ncol = 1, scale = "free_y")
 
 setwd("C:/Users/grace/Documents/Mchem_project")
-ggsave(temp_plot)
+ggsave(temp_plot, filename = "C:/Users/grace/Documents/Mchem_project/correct_tempPlot.png")
+
+#next look at h2o
+
+hrdat_clean <- dat %>%
+filter(!(hour %in% c(3,6,9,12,15,18,21) & mins >= 3 & mins <=8) ) %>%
+  rename(date = ts)%>%
+  pivot_wider(names_from = sector, values_from = hcl)%>%
+  group_by(date) %>% 
+  timeAverage(avg.time = "1 hour", statistic = "mean")%>%
+  select(date, ch3oh, h2co, no2, h2o, ch4, Overblow, Denuder) %>% 
+  mutate(diff = abs(Denuder - Overblow))
+
+hr_h2o <- hrdat_clean %>% 
+  pivot_longer(cols = c(ch3oh, h2co, no2, h2o, ch4, diff), 
+               names_to = "pollutant", values_to = "value" )
+
+hr_speciesplot <-ggplot(hr_h2o, 
+       aes(x = date,
+           y = value,
+           color = pollutant)) +
+  geom_point()+ 
+  labs( x = "Date", 
+        y = "conc ", 
+        color = "pollutant",
+        title = "Absolute difference vs other species measured")+
+  scale_x_datetime(date_breaks = "3 days", date_labels = "%b %d")+
+  scale_color_manual(values = c("#F8766D","#D89000","#39B600","#00BFC4","#00B0F6","#E76BF3" ),labels = c("ch3oh","ch4","Absolute difference", "h2co","h2o","no2"))+
+  theme(strip.text = element_blank(), legend.title = element_blank())+
+  facet_wrap(~pollutant,ncol = 1, scale = "free_y")
+
+ggsave(hr_speciesplot, filename = "C:/Users/grace/Documents/Mchem_project/species_plot.png", 
+       width = 7, height = 9)
+
+cut_h2o <- hrdat_clean %>% select(date, diff, ch4, h2co) %>% pivot_longer(cols = c(h2co,ch4, diff), names_to = "pollutant", values_to = "value" )
+#these species have the most similar patterns 
+#but still no strong trend, let's move on shall we
+ch4_plot <-ggplot(cut_h2o, 
+       aes(x = date,y = value, color = pollutant)) +
+  geom_point()+ 
+  labs( x = "Date",y = "ppb",color = "pollutant",title = "Absolute difference vs other species measured")+
+  scale_x_datetime(date_breaks = "2 days", date_labels = "%b %d")+
+  theme(strip.text = element_blank())+
+  facet_wrap(~pollutant,ncol = 1, scale = "free_y")+
+  scale_color_manual(values = c("#D89000","#39B600","#00BFC4"), labels = c("ch4","Absolute difference", "h2co"))+
+  theme(legend.title = element_blank())
+
+ggsave(ch4_plot, filename = "C:/Users/grace/Documents/Mchem_project/ch4_plot.png", 
+       width = 6, height = 8)
+
+
