@@ -153,23 +153,24 @@ dev.off()
 #(correct)temperature variation (NOT Traw)
 
 setwd("C:/Users/grace/Documents/Mchem_project/Calcs_and_data/Met")
+filepath <- "C:/Users/grace/Documents/Mchem_project/Calcs_and_data/Met"
 met_raw <- read_csv("C:/Users/grace/Documents/Mchem_project/Calcs_and_data/Met/THECIX_Met_Data_July24_Aug21.csv",
                     skip = 1)
 #its finally working !!! had to restart R
+#- in future make sure dtaa not open in notes
 
-#this uses the SW met station measurements only
-met_sw <- met_raw[,1:7] %>%
-  mutate(date = as.POSIXct(Date,format="%Y-%m-%d %H:%M",tz ="EST" )) %>%
-  select(!Date)%>%
+#this uses the NE met station measurements only
+met_ne <- met_raw[,9:15] %>%
+  mutate(date = as.POSIXct(date,format="%Y-%m-%d %H:%M",tz ="EST" )) %>%
   timeAverage(avg.time = "1 hour", statistic = "mean")
 #set date and tz , UTC -5 is the same as EST, Eastern Standard Time. I hope
 #timeAverage for 1 hour to match denuder/overblow averages merging with
 
-hr_temp <- left_join(hravg_clean,met_sw, by = "date") %>%
+hr_temp <- left_join(hravg_clean,met_ne, by = "date") %>%
   filter(!between(date, as.POSIXct("2023-07-31 10:00:00"),
                   as.POSIXct("2023-07-31 18:00:00"))) %>%
   select(!Traw)%>%
-  rename(xdiff = diff, Temp = "AirTemp_SW (ºC)") %>%
+  rename(xdiff = diff, Temp = "AirTemp_NE (ºC)") %>%
   pivot_longer(cols = c(Temp, xdiff),
                names_to = "var", values_to = "value")
 
@@ -183,7 +184,7 @@ temp_plot <-ggplot(hr_temp) +
   facet_wrap(~var,ncol = 1, scale = "free_y")
 
 setwd("C:/Users/grace/Documents/Mchem_project")
-ggsave(temp_plot, filename = "C:/Users/grace/Documents/Mchem_project/correct_tempPlot.png")
+ggsave(temp_plot, filename = "C:/Users/grace/Documents/Mchem_project/NE_tempPlot.png")
 
 #next look at h2o
 
@@ -276,4 +277,17 @@ filt_hcl<-ggplot(hcl,
 ggsave(filt_hcl, filename = "C:/Users/grace/Documents/Mchem_project/filt_total_hcl_fraction.png")
 
 
-                            
+#next is total chlorine :
+#timezone is UTC -4 == AST
+hal_raw <- read_csv("C:/Users/grace/Documents/Mchem_project/Calcs_and_data/totalhalogen/0906_picarro_0728-0821_data.csv")
+
+hal<- hal_raw %>% mutate(date = as.POSIXct(ts, format = "%Y-%m-%d %H:%M" , tz = "AST" )) 
+
+?with_tz
+
+#convert all timezones to utc with with_tz (?)
+
+
+met_ne <- met_raw[,9:15] %>%
+  mutate(date = as.POSIXct(date,format="%Y-%m-%d %H:%M",tz ="EST" )) %>%
+  timeAverage(avg.time = "1 hour", statistic = "mean")
