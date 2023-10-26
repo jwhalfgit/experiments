@@ -242,7 +242,7 @@ hcl_df <- dfAnal %>%
   mutate(sector = case_when(ValveW == 8 ~ "Overblow",
                             ValveW == 0 ~ "Denuder",
                             ValveW == 2 ~ "Total_hcl"),)%>%
-  mutate(hour = hour(hcl_raw$ts), mins = minute(hcl_raw$ts)) %>%
+  mutate(hour = hour(ts), mins = minute(ts)) %>%
   filter(!(hour %in% c(3,6,9,12,15,18,21) & mins >= 3 & mins <=8) ) %>%
   rename(date = ts) %>% 
   pivot_wider(names_from = sector, values_from = hcl) %>%
@@ -274,4 +274,6 @@ filt_hcl<-ggplot(hcl,
   theme(strip.text = element_blank())
 
 ggsave(filt_hcl, filename = "C:/Users/grace/Documents/Mchem_project/filt_total_hcl_fraction.png")
+
+
                             
