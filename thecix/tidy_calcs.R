@@ -278,16 +278,31 @@ ggsave(filt_hcl, filename = "C:/Users/grace/Documents/Mchem_project/filt_total_h
 
 
 #next is total chlorine :
-#timezone is UTC -4 == AST
+#timezone is UTC -4 --> set to "America/New_York"
 hal_raw <- read_csv("C:/Users/grace/Documents/Mchem_project/Calcs_and_data/totalhalogen/0906_picarro_0728-0821_data.csv")
 
-hal<- hal_raw %>% mutate(date = as.POSIXct(ts, format = "%Y-%m-%d %H:%M" , tz = "AST" )) 
-
-?with_tz
-
-#convert all timezones to utc with with_tz (?)
-
-
-met_ne <- met_raw[,9:15] %>%
-  mutate(date = as.POSIXct(date,format="%Y-%m-%d %H:%M",tz ="EST" )) %>%
+#have used the edited total chlorine values - ask Wes if that's right one
+#convert all timezones to UTC with with_tz before join to df (in UTC)
+hal<- hal_raw %>% mutate(date = as.POSIXct(ts, format = "%Y-%m-%d %H:%M" , tz = "America/New_York")) %>%
+  with_tz(ts,tzone = "UTC") %>% 
+  rename(TCl = TClg_edited) %>% 
+  select(date, TCl)%>%
   timeAverage(avg.time = "1 hour", statistic = "mean")
+
+#combine dfs, and remove total_hcl column so don't get confused for this plot
+totcl_df <- left_join(hcl_df,hal, by = "date")%>%
+  select(!Total_hcl)%>%
+  mutate(Ratio = diff/TCl)%>%
+  rename(Difference = diff, "Total chlorine" = TCl)%>%
+  pivot_longer(cols = c(Difference,"Total chlorine", Ratio), names_to = "type", values_to = "value")
+
+totcl_plot<-ggplot(totcl_df) + 
+  aes(x = date, y = value)+
+  labs(x = "Date", y = "", color = "", title = "Absolute difference and total chlorine over campaign")+
+  geom_line(aes(color = type))+
+  scale_color_manual(values = c("deeppink4", "blue", "green"))+
+  facet_wrap(~type,ncol= 1, scale = "free_y")+
+  theme(legend.position = "none")
+
+ggsave(totcl_plot, filename = "C:/Users/grace/Documents/Mchem_project/Total_Cl_fn2.png",
+       width = 6, height = 8)
