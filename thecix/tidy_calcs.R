@@ -143,9 +143,12 @@ hrplot<-ggplot(hrdo,
 ggsave(hrplot, filename = "C:/Users/grace/Documents/Mchem_project/hr_do.png")
 
 #find day and night variations 
-diff_tv <-timeVariation(hravg_clean, pollutant = c("diff"), ylab = "Absolute difference", name.pol = "", col = "deeppink4", main = "")
+#filtered to remove data from 16th Aug onwards
+diff_tv <-hravg_clean %>% filter(date <= as.POSIXct("2023-08-16 01:00:00"))%>%
+  timeVariation(pollutant = c("diff"), ylab = "Absolute difference", name.pol = "", col = "deeppink4", main = "")
 
-png("C:/Users/grace/Documents/Mchem_project/tv_didiff.png",
+
+png("C:/Users/grace/Documents/Mchem_project/tv_didiff_16th_filt.png",
     res = 400, width = 2000, height = 1600)
 diff_tv$plot$hour
 dev.off()
@@ -249,7 +252,8 @@ hcl_df <- dfAnal %>%
   pivot_wider(names_from = sector, values_from = hcl) %>%
   select(date, Total_hcl, Denuder, Overblow)%>%
   timeAverage(avg.time = "1 hour", statistic = "mean") %>%
-  mutate(diff = abs(Denuder - Overblow))
+  mutate(diff = abs(Denuder - Overblow), f_hcl = diff/Total_hcl)
+  
 
 hcl_plot<-ggplot(hcl_df, 
        aes(x = date,
@@ -259,24 +263,37 @@ hcl_plot<-ggplot(hcl_df,
         y = "difference/ total HCl",
         title = "Absolute difference as a fraction of total HCl")+
   scale_x_datetime(date_breaks = "2 days", date_labels = "%b %d")+
-  theme(strip.text = element_blank())
+  theme(strip.text = element_blank())+
+  scale_y_continuous(breaks = seq(-100,400, by = 4))
 
-ggsave(hcl_plot, filename = "C:/Users/grace/Documents/Mchem_project/total_hcl_fraction.png")
+ggsave(hcl_plot, filename = "C:/Users/grace/Documents/Mchem_project/total_hcl_fraction1.1.png",
+       width = 6, height = 10)
 
-#a tad hard to see so will filter point that's massively off
+#a tad hard to see so will filter points that are massively off so the rest is clearer
 # mention to Wes
-hcl <- hcl_df %>% filter(!f_hcl >= 100)
+hcl <- hcl_df %>% filter(!f_hcl >= 100, f_hcl >=-50 )
 
 filt_hcl<-ggplot(hcl, 
        aes(x = date,y = f_hcl)) +
   geom_point()+ 
   labs( x = "Date",  y = "difference/ total HCl",title = "Absolute difference as a fraction of total HCl")+
   scale_x_datetime(date_breaks = "2 days", date_labels = "%b %d")+
-  theme(strip.text = element_blank())
+  theme(strip.text = element_blank())+
+  scale_y_continuous(breaks = seq(-50,50, by = 2))
 
-ggsave(filt_hcl, filename = "C:/Users/grace/Documents/Mchem_project/filt_total_hcl_fraction.png")
+ggsave(filt_hcl, filename = "C:/Users/grace/Documents/Mchem_project/filt_total_hcl_fraction1.1.png",
+       width = 6,height= 8)
 
+#save as interactive plot
 
+int_hcl<-ggplotly(hcl_plot)
+
+#save as widget
+htmlwidgets::saveWidget(
+  widget = int_hcl,
+  file = "C:/Users/grace/Documents/Mchem_project/int_hcl_sep2.html",
+  selfcontained = TRUE)
+)
 #next is total chlorine :
 #timezone is UTC -4 --> set to "America/New_York"
 hal_raw <- read_csv("C:/Users/grace/Documents/Mchem_project/Calcs_and_data/totalhalogen/0906_picarro_0728-0821_data.csv")
@@ -306,3 +323,84 @@ totcl_plot<-ggplot(totcl_df) +
 
 ggsave(totcl_plot, filename = "C:/Users/grace/Documents/Mchem_project/Total_Cl_fn2.png",
        width = 6, height = 8)
+
+
+#Particle data 
+#ill come back to
+
+
+# Cl- data
+
+library("readxl")
+AMIC_ra<- read_excel("C:/Users/grace/Documents/Mchem_project/Calcs_and_data/23July_AIMIC_observation.xlsx")
+
+#will come back to this once have spoken to Wes
+
+
+
+#calculate Reynolds number 
+
+#temp in degrees, pressure = kPa, flowrate = litres per minute
+#(these are converted later on)
+sampleLineFlow <- data.frame(temp_C = rep(25, times = 81), pressure_kPa = rep(101.325, times=  81), flow_rate_slpm = seq(0,80, by = 1))
+
+##### this is Will's code
+# From here if you care: W. Sutherland. “The viscosity of gases and molecular force”. Philosophical Magazine 5 (1893), 507–531.
+# https://web.stanford.edu/~cantwell/AA210A_Course_Material/AA210A_Resources/Sutherland_1893_Paper_on_Viscosity.pdf
+sutherland_viscosity = function(temp){
+  ((1.458e-6)*(temp^(3/2)))/(temp+110.4)
+}
+
+# https://en.wikipedia.org/wiki/Reynolds_number
+reynolds = function(density,temp,transit_speed,inDiam){
+  (density*transit_speed*inDiam)/sutherland_viscosity(temp)
+}
+
+#will use to work out the flow rate required for a specific Reynolds number 
+transit = function(density,temp, ReyNum,inDiam){
+  (ReyNum*sutherland_viscosity(temp))/(density*inDiam)
+}
+
+#internal diameter of flow tube
+inDiam = 0.024 # m
+
+tubeArea = (pi*(inDiam/2)^2) # m^2
+
+# flow rate is in standard liters per minute,
+# the constant converts into something sensible like m^3 s^-1
+#this UNITS are actually m/s for transit speed because divided by area 
+#*
+sampleLineParsed = sampleLineFlow %>%
+  mutate(temp = temp_C+273.15, # C -> K
+         transit_speed = (flow_rate_slpm*1.666667e-05)/tubeArea,
+         pressure_Pa = pressure_kPa*1e3) %>% # kPa -> Pa
+  select(flow_rate_slpm,transit_speed,pressure_Pa,temp) %>%   #removed date from select
+  mutate(density = pressure_Pa/(287.058*temp)) # this bit calculates the density from the line pressure and temperature
+
+sampleLineParsed$RenNum = reynolds(density = sampleLineParsed$density,
+                                   temp = sampleLineParsed$temp,
+                                   transit_speed = sampleLineParsed$transit_speed,
+                                   inDiam = inDiam)
+
+# transit velocity (should churn out same as transit_speed)
+sampleLineParsed$calTransit = transit(density = sampleLineParsed$density,
+                                  temp = sampleLineParsed$temp,
+                                   ReyNum = sampleLineParsed$RenNum,
+                                   inDiam = inDiam )
+
+TransCrit = print(transit(density = 1.183892, temp = 298.15, ReyNum = 4000, inDiam= inDiam))
+Flowcrit = print(((transit(density = 1.183892, temp = 298.15, ReyNum = 4000, inDiam= inDiam))*tubeArea)/1.666667e-05)
+
+#flow crit = 70.020446 litres per minute
+#transit speed crit  = 2.586433 m/s
+#70 lmp = 3988.35096 Reynolds number , transit speed = 2.57890006 m/s
+#71 lpm = 4045.32740, transit speed = 2.61574149 m/s
+
+rey_plot<-ggplot(sampleLineParsed)+
+  aes(x = flow_rate_slpm, y  =RenNum)+
+  labs(x = "flow rate lpm", y = "Reynolds Number", subtitle = "Reynolds Number: Temp = 298.15K, Pressure = 101325 Pa, Internal diameter = 0.024 m")+
+  geom_line()+
+  geom_hline(yintercept = 4000, linetype = "dashed", color = "red")+
+  scale_x_continuous(breaks = seq(0,80, by = 5))
+
+ggsave(rey_plot, filename = "C:/Users/grace/Documents/Mchem_project/Reynolds_plot.png")
