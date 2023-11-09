@@ -253,7 +253,6 @@ hcl_df <- dfAnal %>%
   select(date, Total_hcl, Denuder, Overblow)%>%
   timeAverage(avg.time = "1 hour", statistic = "mean") %>%
   mutate(diff = abs(Denuder - Overblow), f_hcl = diff/Total_hcl)
-  
 
 hcl_plot<-ggplot(hcl_df, 
        aes(x = date,
@@ -332,9 +331,10 @@ ggsave(totcl_plot, filename = "C:/Users/grace/Documents/Mchem_project/Total_Cl_f
 # Cl- data
 
 library("readxl")
-AMIC_ra<- read_excel("C:/Users/grace/Documents/Mchem_project/Calcs_and_data/23July_AIMIC_observation.xlsx")
-
-#will come back to this once have spoken to Wes
+AMIC_raw<- read_excel("C:/Users/grace/Documents/Mchem_project/Calcs_and_data/23July_AIMIC_observation.xlsx")
+ #what particle and gas phase chlorine plots
+#then both of these variables against Cl-
+#and the sum of particle and gas vs Cl-
 
 
 
@@ -398,9 +398,91 @@ Flowcrit = print(((transit(density = 1.183892, temp = 298.15, ReyNum = 4000, inD
 
 rey_plot<-ggplot(sampleLineParsed)+
   aes(x = flow_rate_slpm, y  =RenNum)+
-  labs(x = "flow rate lpm", y = "Reynolds Number", subtitle = "Reynolds Number: Temp = 298.15K, Pressure = 101325 Pa, Internal diameter = 0.024 m")+
+  labs(x = "flow rate lpm", y = "Reynolds Number", title = "Reynolds Number Plot", subtitle = "Turbulent flow at flow rate >= 70.020 lpm (2.586 m/s)", caption  = "Temp = 298.15K, Pressure = 101325 Pa, Internal diameter = 0.024 m")+
   geom_line()+
   geom_hline(yintercept = 4000, linetype = "dashed", color = "red")+
   scale_x_continuous(breaks = seq(0,80, by = 5))
 
 ggsave(rey_plot, filename = "C:/Users/grace/Documents/Mchem_project/Reynolds_plot.png")
+
+
+
+# looking at suspected biomass burning cause of HCl plume
+#CO and ACN data
+
+#SORT OUT TIMEZONES!!
+#CO data in EDT
+CO_raw <- read_csv("C:/Users/grace/Documents/Mchem_project/Calcs_and_data/CO_hollywood.csv", )
+CO <- CO_raw %>% force_tz(date, tz = "America/New_York")%>% with_tz(date, tz = "UTC") %>% rename(CO_ppm = "Mixing Ratio (ppm)", date = DateTime ) %>% timeAverage(avg.time = "hour")
+
+#combine with hcl dataframe to plot against HCl
+comb_hcl <- left_join(hcl_df, CO, by = "date") 
+
+#need to divide ACN by 63 to get in ppb
+#ACN timezone is UTC - which is set to automatically
+ACN_raw <- read_csv("C:/Users/grace/Documents/Mchem_project/Calcs_and_data/Acetonitrile raw data.csv")
+ACN <- ACN_raw %>% rename(ACN = "'C2H4N+'", date = t_start_Buf) %>%  
+  mutate(ACN_ppb = ACN/63)%>% 
+  select(date, ACN_ppb) %>% timeAverage(avg.time = "hour")
+
+comb_all_hcl <- left_join(comb_hcl,ACN, by = "date") %>% mutate(enhancement = ACN_ppb/CO_ppm)%>%
+  pivot_longer(cols = c("Total_hcl","CO_ppm", "ACN_ppb", "enhancement"),names_to = "Species", values_to = "conc")
+
+all_enh<-ggplot(comb_all_hcl)+
+  aes(x = date, y = conc, color = Species ) +
+  geom_line()+ facet_wrap(~Species,ncol= 1, scale = "free_y")
+
+ggsave(all_enh, filename = "C:/Users/grace/Documents/Mchem_project/all_enh_plots.png")
+
+#split graphs up into fewer variables
+
+ACN_CO <- left_join(comb_hcl,ACN, by = "date") %>% mutate(enhancement = ACN_ppb/CO_ppm)%>%
+  pivot_longer(cols = c("Total_hcl","CO_ppm", "ACN_ppb"),names_to = "Species", values_to = "conc")
+
+ACN_CO_plot<-ggplot(ACN_CO)+
+  aes(x = date, y = conc, color = Species ) +
+  geom_line()+ facet_wrap(~Species,ncol= 1, scale = "free_y")
+
+ggsave(ACN_CO_plot, filename= "C:/Users/grace/Documents/Mchem_project/ACN_CO_plot.png")
+
+enh <- left_join(comb_hcl,ACN, by = "date") %>% mutate(enhancement = ACN_ppb/CO_ppm)%>%
+  pivot_longer(cols = c("Total_hcl","enhancement"),names_to = "Species", values_to = "conc")
+
+ggplot(enh)+
+  aes(x = date, y = conc, color = Species ) +
+  geom_line()+ facet_wrap(~Species,ncol= 1, scale = "free_y")
+
+enh_plot<-ggplot(comb_all_hcl)+
+  aes(x = date, y = enhancement ) +
+  geom_line()+
+  scale_y_continuous(breaks = seq(-25,300, by = 10))
+
+ggsave(enh_plot, filename = "C:/Users/grace/Documents/Mchem_project/enhancement.png")
+
+
+
+# okay lets do the delta vs particle and gas phase chloride
+
+
+library("readxl")
+AIMIC_raw<- read_excel("C:/Users/grace/Documents/Mchem_project/Calcs_and_data/23July_AIMIC_observation.xlsx")
+#what particle and gas phase chlorine plots
+#then both of these variables against Cl-
+#and the sum of particle and gas vs Cl-
+
+AIMIC_raw <- read_csv("C:/Users/grace/Documents/Mchem_project/Calcs_and_data/23July_AIMIC_obs3.csv")
+
+AIMIC <- AIMIC_raw %>% select(Time, "gCl-", "pCl-") %>% rename(date = Time) %>% mutate(date = as.POSIXct(date,format="%d/%m/%Y %H:%M",tz ="America/New_York" ))
+
+###### CHECK WITH WES ABOUT THE TIMEZONE FOR AIMIC. for now assuming its in EDT
+chloride <- left_join(hcl_df, AIMIC, by = "date") %>% pivot_longer(cols = c(diff,"gCl-","pCl-"), names_to = "name", values_to = "value")
+
+
+chloride_plot<-ggplot(chloride)+
+  aes(x = date, y = value, color = name ) +
+  geom_line()+ facet_wrap(~name,ncol= 1, scale = "free_y")
+
+
+ggsave(chloride_plot, filename = "C:/Users/grace/Documents/Mchem_project/chloride_comb.png")
+
+ggsave(chloride_plot, filename = "C:/Users/grace/Documents/Mchem_project/Calcs_and_data/chloride.png")
