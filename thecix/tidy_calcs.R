@@ -238,7 +238,7 @@ ggsave(ch4_plot, filename = "C:/Users/grace/Documents/Mchem_project/ch4_plot.png
        width = 6, height = 8)
 
 #total HCl plot (ValveW ==2)
-
+library(openair)
 hcl_df <- dfAnal %>% 
   filter(ValveW == 0| ValveW == 8|ValveW == 2) %>%
   mutate(period = cumsum(flag !=lag(flag, default = flag[1])) ) %>%
@@ -353,7 +353,7 @@ transit = function(density,temp, ReyNum,inDiam){
 }
 
 #internal diameter of flow tube
-inDiam = 0.024 # m
+inDiam = 0.012 # m
 
 tubeArea = (pi*(inDiam/2)^2) # m^2
 
@@ -398,8 +398,6 @@ ggsave(rey_plot, filename = "C:/Users/grace/Documents/Mchem_project/Reynolds_plo
 
 # looking at suspected biomass burning cause of HCl plume
 #CO and ACN data
-
-#SORT OUT TIMEZONES!!
 #CO data in EDT
 CO_raw <- read_csv("C:/Users/grace/Documents/Mchem_project/Calcs_and_data/CO_hollywood.csv", )
 CO <- CO_raw %>% force_tz(date, tz = "America/New_York")%>% with_tz(date, tz = "UTC") %>% rename(CO_ppm = "Mixing Ratio (ppm)", date = DateTime ) %>% timeAverage(avg.time = "hour")
@@ -421,7 +419,13 @@ all_enh<-ggplot(comb_all_hcl)+
   aes(x = date, y = conc, color = Species ) +
   geom_line()+ facet_wrap(~Species,ncol= 1, scale = "free_y")
 
-ggsave(all_enh, filename = "C:/Users/grace/Documents/Mchem_project/all_enh_plots.png")
+comb_all_hcl_filt <- comb_all_hcl %>% filter(between(date,ymd("2023-07-31"), ymd("2023-08-07")))
+filt_enh <- ggplot(comb_all_hcl_filt)+
+  aes(x = date, y = conc, color = Species ) +
+  geom_line()+ facet_wrap(~Species,ncol= 1, scale = "free_y")
+
+ggsave(all_enh, filename = "C:/Users/grace/Documents/Mchem_project/all_enh_plots.png", height = 10, width = 9)
+ggsave(filt_enh, filename = "C:/Users/grace/Documents/Mchem_project/filt_enhancement_plots.png", height = 10, width = 9)
 
 #split graphs up into fewer variables
 
@@ -451,27 +455,28 @@ ggsave(enh_plot, filename = "C:/Users/grace/Documents/Mchem_project/enhancement.
 
 
 # okay lets do the delta vs particle and gas phase chloride
-
-
-library("readxl")
-AIMIC_raw<- read_excel("C:/Users/grace/Documents/Mchem_project/Calcs_and_data/23July_AIMIC_observation.xlsx")
-#what particle and gas phase chlorine plots
-#then both of these variables against Cl-
-#and the sum of particle and gas vs Cl-
-
+#AIMIC time is in local (EDT)
 AIMIC_raw <- read_csv("C:/Users/grace/Documents/Mchem_project/Calcs_and_data/23July_AIMIC_obs3.csv")
 
-AIMIC <- AIMIC_raw %>% select(Time, "gCl-", "pCl-") %>% rename(date = Time) %>% mutate(date = as.POSIXct(date,format="%d/%m/%Y %H:%M",tz ="America/New_York" ))
+AIMIC <- AIMIC_raw %>% select(Time, "gCl-", "pCl-") %>% rename(date = Time) %>% 
+  mutate(date = as.POSIXct(date,format="%d/%m/%Y %H:%M",tz ="America/New_York" )) %>% with_tz(date, tz = "UTC")
 
-###### CHECK WITH WES ABOUT THE TIMEZONE FOR AIMIC. for now assuming its in EDT
-chloride <- left_join(hcl_df, AIMIC, by = "date") %>% pivot_longer(cols = c(diff,"gCl-","pCl-"), names_to = "name", values_to = "value")
+#Need to convert UNITS !!! gCl and pCl are in micrograms per meter cubed
+#for the sake of ease will convert diff and total hcl to ppb
+#Concentration (µg/m3) = molecular weight x concentration (ppb) ÷ 24.45
+# hcl molecular weight  = 36.46 g/mol
+# 36.46/24.45 * concentration
+chloride <- left_join(hcl_df, AIMIC, by = "date") %>%
+  mutate(delta = (diff*(36.46/24.45)), Total_hcl = (Total_hcl*(36.46/24.45))) %>%
+  pivot_longer(cols = c(delta,Total_hcl,"gCl-","pCl-"), names_to = "name", values_to = "value")
 
-
+library(wesanderson)
 chloride_plot<-ggplot(chloride)+
   aes(x = date, y = value, color = name ) +
-  geom_line()+ facet_wrap(~name,ncol= 1, scale = "free_y")
+  geom_line()+ facet_wrap(~name,ncol= 1, scale = "free_y")+
+  labs(y=  "conc (µg/m³)", fill = "", color = "")+
+  scale_color_manual(values=wes_palette(n=4, name="Darjeeling1"))
 
-
-ggsave(chloride_plot, filename = "C:/Users/grace/Documents/Mchem_project/chloride_comb.png")
-
+ggsave(chloride_plot, filename = "C:/Users/grace/Documents/Mchem_project/chloride_comb_hcl.png", height = 10, width = 9)
 ggsave(chloride_plot, filename = "C:/Users/grace/Documents/Mchem_project/Calcs_and_data/chloride.png")
+
