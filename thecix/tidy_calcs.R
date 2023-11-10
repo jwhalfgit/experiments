@@ -326,16 +326,7 @@ ggsave(totcl_plot, filename = "C:/Users/grace/Documents/Mchem_project/Total_Cl_f
 
 #Particle data 
 #ill come back to
-
-
 # Cl- data
-
-library("readxl")
-AMIC_raw<- read_excel("C:/Users/grace/Documents/Mchem_project/Calcs_and_data/23July_AIMIC_observation.xlsx")
- #what particle and gas phase chlorine plots
-#then both of these variables against Cl-
-#and the sum of particle and gas vs Cl-
-
 
 
 #calculate Reynolds number 
@@ -404,8 +395,6 @@ rey_plot<-ggplot(sampleLineParsed)+
   scale_x_continuous(breaks = seq(0,80, by = 5))
 
 ggsave(rey_plot, filename = "C:/Users/grace/Documents/Mchem_project/Reynolds_plot.png")
-
-
 
 # looking at suspected biomass burning cause of HCl plume
 #CO and ACN data
