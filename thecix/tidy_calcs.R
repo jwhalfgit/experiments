@@ -478,5 +478,47 @@ chloride_plot<-ggplot(chloride)+
   scale_color_manual(values=wes_palette(n=4, name="Darjeeling1"))
 
 ggsave(chloride_plot, filename = "C:/Users/grace/Documents/Mchem_project/chloride_comb_hcl.png", height = 10, width = 9)
-ggsave(chloride_plot, filename = "C:/Users/grace/Documents/Mchem_project/Calcs_and_data/chloride.png")
 
+
+
+# next plot pCL on one axis, delta on another axis
+
+pCl_df <- left_join(hcl_df, AIMIC, by = "date") %>% rename(pCl = "pCl-", gCl = "gCl-") %>%
+  mutate(delta = (diff*(36.46/24.45)), ratio  = delta/pCl, Total_hcl = (Total_hcl*(36.46/24.45))) %>%
+  filter(pCl <= 0.2, gCl <=0.35)
+
+ggplot(pCl_df)+
+  aes(x = "pCl-", y = diff)+
+  geom_line()
+
+Cl_delt <-ggplot(pCl_df, aes(x = date)) +
+  geom_line(aes(y = delta, color = "delta")) +
+  geom_line(aes(y = pCl, color = "pCl")) +
+  scale_color_manual(values = c("#ae3918","#d19c2f")) +
+  labs(x = "Time", y = "ppb", color = "Variable")+
+  scale_x_datetime(date_breaks = "3 day", date_labels = "%b %d")+
+  scale_y_continuous(breaks = seq(0,0.6, by = 0.05))+
+  labs(title = "delta and pCl-")
+  
+ggsave(Cl_delt, filename = "C:/Users/grace/Documents/Mchem_project/pCl_delta.png", height = 7, width = 10)
+
+p_filt <- pCl_df %>% filter(pCl <=0.1, delta <=0.3)
+
+p<-ggplot(data = pCl_df, aes(x = delta, y = pCl,  color = pCl)) +
+  geom_point(color = "#d19c2f")+
+  scale_y_continuous(breaks = seq(0,0.17, by = 0.05))
+
+ggsave(p, filename = "C:/Users/grace/Documents/Mchem_project/pCl_delt_correlation.png", height = 7, width =10)
+
+ggsave(p_plot_filt, filename = "C:/Users/grace/Documents/Mchem_project/pCl_delt_correlation_filt.png", height = 7, width =10)
+
+p_plot_filt<- ggplot(data = p_filt, aes(x = delta, y = pCl,  color = pCl)) +
+  geom_point(color = "#d19c2f")+
+  scale_y_continuous(breaks = seq(0,0.17, by = 0.05))+ labs(caption = "filtered: pCl < 0.1, delta < 0.3")
+
+
+g <-ggplot(data = pCl_df, aes(x = delta, y = gCl,  color = gCl)) +
+  geom_point(color = "#49997c")+
+  scale_y_continuous(breaks = seq(0,0.5, by = 0.05))
+
+ggsave(g, filename = "C:/Users/grace/Documents/Mchem_project/gCl_delt_correlation.png", height = 7, width =10)
