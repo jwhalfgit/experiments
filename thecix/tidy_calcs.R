@@ -164,7 +164,7 @@ met_raw <- read_csv("C:/Users/grace/Documents/Mchem_project/Calcs_and_data/Met/T
 
 #this uses the NE met station measurements only
 met_ne <- met_raw[,9:15] %>%
-  mutate(date = as.POSIXct(date,format="%Y-%m-%d %H:%M",tz ="EST" )) %>%
+  mutate(date = as.POSIXct(date,format="%Y-%m-%d %H:%M",tz ="EST" )) %>% with_tz(tzone = "UTC")%>%
   timeAverage(avg.time = "1 hour", statistic = "mean")
 #set date and tz , UTC -5 is the same as EST, Eastern Standard Time. I hope
 #timeAverage for 1 hour to match denuder/overblow averages merging with
@@ -462,7 +462,7 @@ AIMIC <- AIMIC_raw %>% select(Time, "gCl-", "pCl-") %>% rename(date = Time) %>%
   mutate(date = as.POSIXct(date,format="%d/%m/%Y %H:%M",tz ="America/New_York" )) %>% with_tz(date, tz = "UTC")
 
 #Need to convert UNITS !!! gCl and pCl are in micrograms per meter cubed
-#for the sake of ease will convert diff and total hcl to ppb
+#for the sake of ease will convert diff and total hcl to ppb **maybe meant micrograms/m3 (?)
 #Concentration (µg/m3) = molecular weight x concentration (ppb) ÷ 24.45
 # hcl molecular weight  = 36.46 g/mol
 # 36.46/24.45 * concentration
@@ -487,38 +487,102 @@ pCl_df <- left_join(hcl_df, AIMIC, by = "date") %>% rename(pCl = "pCl-", gCl = "
   mutate(delta = (diff*(36.46/24.45)), ratio  = delta/pCl, Total_hcl = (Total_hcl*(36.46/24.45))) %>%
   filter(pCl <= 0.2, gCl <=0.35)
 
-ggplot(pCl_df)+
-  aes(x = "pCl-", y = diff)+
-  geom_line()
-
-Cl_delt <-ggplot(pCl_df, aes(x = date)) +
-  geom_line(aes(y = delta, color = "delta")) +
-  geom_line(aes(y = pCl, color = "pCl")) +
-  scale_color_manual(values = c("#ae3918","#d19c2f")) +
-  labs(x = "Time", y = "ppb", color = "Variable")+
-  scale_x_datetime(date_breaks = "3 day", date_labels = "%b %d")+
-  scale_y_continuous(breaks = seq(0,0.6, by = 0.05))+
-  labs(title = "delta and pCl-")
-  
-ggsave(Cl_delt, filename = "C:/Users/grace/Documents/Mchem_project/pCl_delta.png", height = 7, width = 10)
-
 p_filt <- pCl_df %>% filter(pCl <=0.1, delta <=0.3)
 
 p<-ggplot(data = pCl_df, aes(x = delta, y = pCl,  color = pCl)) +
   geom_point(color = "#d19c2f")+
+  labs(y = "pCl- (µg/m3)", x = "delta (µg/m3)")+
   scale_y_continuous(breaks = seq(0,0.17, by = 0.05))
 
 ggsave(p, filename = "C:/Users/grace/Documents/Mchem_project/pCl_delt_correlation.png", height = 7, width =10)
-
 ggsave(p_plot_filt, filename = "C:/Users/grace/Documents/Mchem_project/pCl_delt_correlation_filt.png", height = 7, width =10)
 
 p_plot_filt<- ggplot(data = p_filt, aes(x = delta, y = pCl,  color = pCl)) +
   geom_point(color = "#d19c2f")+
+  labs(y = "pCl- (µg/m3)", x = "delta (µg/m3)")+
   scale_y_continuous(breaks = seq(0,0.17, by = 0.05))+ labs(caption = "filtered: pCl < 0.1, delta < 0.3")
-
 
 g <-ggplot(data = pCl_df, aes(x = delta, y = gCl,  color = gCl)) +
   geom_point(color = "#49997c")+
+  labs(y = "gCl- (µg/m3)", x = "delta (µg/m3)")+
   scale_y_continuous(breaks = seq(0,0.5, by = 0.05))
 
 ggsave(g, filename = "C:/Users/grace/Documents/Mchem_project/gCl_delt_correlation.png", height = 7, width =10)
+
+
+
+#plot relative humidity from met data vs Hcl data
+
+
+met_raw <- read_csv("C:/Users/grace/Documents/Mchem_project/Calcs_and_data/Met/THECIX_Met_Data_July24_Aug21.csv",
+                    skip = 1)
+
+#this uses the NE met station measurements only
+met_ne <- met_raw[,9:15] %>%
+  mutate(date = as.POSIXct(date,format="%Y-%m-%d %H:%M",tz ="EST" )) %>% with_tz(tzone = "UTC")%>%
+  timeAverage(avg.time = "1 hour", statistic = "mean")
+#set date and tz , UTC -5 is the same as EST, Eastern Standard Time. I hope
+#timeAverage for 1 hour to match denuder/overblow averages merging with
+
+hcl_temp <- left_join(hcl_df,met_ne, by = "date") %>% rename(Humidity = "RH_NE (%)", delta = diff)%>%
+  pivot_longer(cols = c(Total_hcl, delta, Humidity), names_to  = "var", values_to = "conc")
+
+# plot humidity vs hcl
+#also plot against delta ig incase Wes wants that
+
+
+ggplot(hcl_temp)+
+  aes(x = date, y = conc, color = var)+
+  geom_line()+ facet_wrap(~var,ncol= 1, scale = "free_y")
+
+
+h_plot <-ggplot(hcl_temp, aes(x = date, y = delta)) +
+  geom_line(aes(color = "delta")) +
+  geom_line(aes(y = Humidity/500, color = "humidity")) +
+  scale_x_continuous(breaks = seq(0, 336, 24)) +
+  scale_y_continuous(sec.axis = sec_axis(~.*500, name="Relative Humidity (%)")) +
+  labs(x = "date", y = "Delta", color = "", fill = "") +
+  scale_color_manual(values = c("orange2", "gray30"))+
+  scale_fill_discrete(labels=c('delta', 'Relative Humididy (%)'))
+
+ggsave(h_plot, filename = "C:/Users/grace/Documents/Mchem_project/humidity_delta.png", height = 7, width =10)
+
+#this plot isn't really as important
+hcl_hum_plot<-ggplot(hcl_temp, aes(x = date, y = Total_hcl)) +
+  geom_line(aes(color = "HCl")) +
+  geom_line(aes(y = Humidity/500, color = "humidity")) +
+  scale_x_continuous(breaks = seq(0, 336, 24)) +
+  scale_y_continuous(sec.axis = sec_axis(~.*500, name="Relative Humidity (%)")) +
+  labs(x = "date", y = "Total HCl", color = "", fill = "") +
+  scale_color_manual(values = c("purple3", "gray30"))+
+  scale_fill_discrete(labels=c('delta', 'Relative Humididy (%)'))
+
+ggsave(hcl_hum_plot, filename = "C:/Users/grace/Documents/Mchem_project/humidity_hcl.png", height = 7, width =10)
+
+
+# prep for plot of delta vs H2O
+
+TILDAS_df <- dfAnal %>% 
+  filter(ValveW == 0| ValveW == 8) %>%
+  mutate(period = cumsum(flag !=lag(flag, default = flag[1])) ) %>%
+  filter(flag != 1) %>%
+  mutate(sector = case_when(ValveW == 8 ~ "Overblow",
+                            ValveW == 0 ~ "Denuder"),)%>%
+  mutate(hour = hour(ts), mins = minute(ts)) %>%
+  filter(!(hour %in% c(3,6,9,12,15,18,21) & mins >= 3 & mins <=8) ) %>%
+  rename(date = ts)%>% 
+  pivot_wider(names_from = sector, values_from = hcl)%>%
+  timeAverage(avg.time = "1 hour", statistic = "mean") %>%
+  mutate(diff = abs(Denuder - Overblow)) %>%
+  select(date, h2o, Denuder, Overblow, diff)
+
+h2o_plot<-ggplot(TILDAS_df, aes(x = date, y = diff)) +
+  geom_line(aes(color = "delta")) +
+  geom_line(aes(y = h2o/80000000, color = "h2o")) +
+  scale_y_continuous(sec.axis = sec_axis(~.*80000000, name="H2O")) +
+  labs(x = "date", y = "delta", color = "", fill = "") +
+  scale_color_manual(values = c("steelblue", "gray30"))+
+  scale_fill_discrete(labels=c('delta', 'H2O'))
+
+ggsave(h2o_plot, filename = "C:/Users/grace/Documents/Mchem_project/h2o_delta.png", height = 7, width =10)
+
