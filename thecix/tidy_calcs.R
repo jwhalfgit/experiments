@@ -557,6 +557,10 @@ hcl_hum_plot<-ggplot(hcl_temp, aes(x = date, y = Total_hcl)) +
   scale_color_manual(values = c("purple3", "gray30"))+
   scale_fill_discrete(labels=c('delta', 'Relative Humididy (%)'))
 
+
+#**** theme(legend.position =  "bottom")   - puts legend under the graph
+#*# legend.title = element_blank()  - will get rid of legend titles
+
 ggsave(hcl_hum_plot, filename = "C:/Users/grace/Documents/Mchem_project/humidity_hcl.png", height = 7, width =10)
 
 
@@ -586,3 +590,105 @@ h2o_plot<-ggplot(TILDAS_df, aes(x = date, y = diff)) +
 
 ggsave(h2o_plot, filename = "C:/Users/grace/Documents/Mchem_project/h2o_delta.png", height = 7, width =10)
 
+##
+#####Particle composition - this all loads in nicely now but don't really need it at the moment
+##
+
+file_names = list.files("C:/Users/grace/Documents/Mchem_project/Calcs_and_data/SMPS",
+                        full.names = T,
+                        recursive = T,
+                        pattern = ".csv")
+
+#if i skip out row with row names, wont load in (i.e skip = 26)
+particle_raw = file_names %>% 
+  map_dfr(read_csv, col_names = F, skip = 25)
+
+#assign column names as same as file i edited w/ all the nonsense at start removed
+example<- read_csv("C:/Users/grace/Documents/Mchem_project/Calcs_and_data/new_SMPS_example.csv")
+colnames(particle_raw) <- colnames(example)
+
+#check all column names are correctly labelled
+colnames(example)
+
+#this removes the rows with the column names in the by searching for rows
+#in the date column that say "Date" and only selecting  rows that don't have "Date" in them
+#negate = TRUE returns elements that don't match conditions i.e what we want :)
+particle_filt <-particle_raw %>%
+  filter(str_detect(Date, "Date", negate = TRUE))
+
+
+
+
+#back to AIMIC data 
+AIMIC_raw <- read_csv("C:/Users/grace/Documents/Mchem_project/Calcs_and_data/23July_AIMIC_obs3.csv")
+
+AIMIC_full <- AIMIC_raw %>% rename(date = Time) %>% 
+  mutate(date = as.POSIXct(date,format="%d/%m/%Y %H:%M",tz ="America/New_York" )) %>% with_tz(date, tz = "UTC")
+ # rename(pCl = "pCl-", gCl = "gCl-")
+         #,NH4 = "NH4+...7", DMA = "DMA+...8", DEA = "DEA+...9", SO4 = "SO42-...13", Oxalate = "Oxalate...14",)
+
+pCl_df <- left_join(hcl_df, AIMIC_full, by = "date") %>% rename(pCl = "pCl-", gCl = "gCl-") %>%
+  mutate(delta = (diff*(36.46/24.45)), ratio  = delta/pCl, Total_hcl = (Total_hcl*(36.46/24.45)))
+   
+rm(testing)
+
+p<-ggplot(data = pCl_df, aes(x = delta, y = pCl,  color = pCl)) +
+  geom_point(color = "#d19c2f")+
+  labs(y = "pCl- (µg/m3)", x = "delta (µg/m3)")+
+  scale_y_continuous(breaks = seq(0,0.17, by = 0.05))
+
+
+#  filter(pCl <= 0.2, gCl <=0.35)
+
+ggplot(data = pCl_df, aes(x = delta, y = Cl, color = Cl)) +
+  geom_point(color = "#d19c2f")+
+  labs(y = "pCl- (µg/m3)", x = "delta (µg/m3)")+
+  scale_y_continuous(breaks = seq(0,0.17, by = 0.05))
+
+#next want to find the date/times when delta was greater than 0.2 to search other 
+#species concs at the corresponding times
+
+#library(latex2exp)  
+#lab(y = latex2exp::TeX("$O_3$))  or for superscript "$O^3$" , for more than one number $O^{32}$
+#source scripts that load in the data - e.g all the stuff that would load a desired df
+#create an r script and save separately for these thins - could save time in the long run
+#what is Viking? look up
+#also look at using quattro /r markdown - allows you to keep text and plots alongside the raw code
+# can use read sheets for excel files with more than one sheet ???
+#read.table() has lots of variables e.g one that ignores blank space before a dataframe
+
+
+pCl_filt <- pCl_df %>%
+  mutate(sector = case_when( delta > 0.18 & between(date, ymd("2023-08-01"),ymd("2023-08-04")) ~ "deeppink",
+                             delta > 0.18 & between(date, ymd("2023-08-04"),ymd("2023-08-07")) ~ "steelblue2",
+                             delta > 0.18 & between(date, ymd("2023-08-07"),ymd("2023-08-10")) ~ "maroon",
+                             delta > 0.18 & between(date, ymd("2023-08-14"),ymd("2023-08-18")) ~ "blue",
+                             delta > 0.18 & between(date, ymd("2023-08-18"), ymd("2023-08-22")) ~ "green3",
+                            TRUE ~ "#d19c2f"))  %>%
+  filter(pCl <= 0.2, gCl <=0.35)
+
+pCL_deet <- pCl_df
+
+#### plot these points as time series
+#mark the different time sections in different colours on plot
+
+#want plots 
+delta_plot<-ggplot(data = pCl_filt, aes(x = delta, y = pCl, color = sector)) +
+  geom_point()+
+  labs(y = "pCl- (µg/m3)", x = "delta (µg/m3)")+
+  scale_y_continuous(breaks = seq(0,0.20, by = 0.02))+
+  scale_color_identity()+scale_x_continuous(breaks = seq(0,0.5, by = 0.05))
+
+ggsave(delta_plot, filename = "C:/Users/grace/Documents/Mchem_project/large_delta_pcl_plot.png", height = 8, width= 12)
+
+date_plot<-ggplot(data = pCl_filt, aes(x = date, y = pCl, color = sector)) +
+  geom_point()+
+  labs(y = "pCl- (µg/m3)", x = "date")+
+  scale_y_continuous(breaks = seq(0,0.20, by = 0.02))+
+  scale_color_identity()+
+  scale_x_datetime(date_breaks = "2 day", date_labels = "%b %d")
+
+#this short data frame summaries all the coloured in data points
+delt_filt <-pCl_filt %>% 
+  filter(sector != "#d19c2f") %>% 
+  select(date, pCl, diff,Total_hcl, sector)
