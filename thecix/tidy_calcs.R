@@ -334,7 +334,7 @@ ggsave(totcl_plot, filename = "C:/Users/grace/Documents/Mchem_project/Total_Cl_f
 #temp in degrees, pressure = kPa, flowrate = litres per minute
 #(these are converted later on)
 sampleLineFlow <- data.frame(temp_C = rep(25, times = 81), pressure_kPa = rep(101.325, times=  81), flow_rate_slpm = seq(0,80, by = 1))
-
+sampleLineFlow <- data.frame(temp_C = 25, pressure_kPa = rep(101.325, times=  81), flow_rate_slpm = 70)
 ##### this is Will's code
 # From here if you care: W. Sutherland. “The viscosity of gases and molecular force”. Philosophical Magazine 5 (1893), 507–531.
 # https://web.stanford.edu/~cantwell/AA210A_Course_Material/AA210A_Resources/Sutherland_1893_Paper_on_Viscosity.pdf
@@ -353,7 +353,7 @@ transit = function(density,temp, ReyNum,inDiam){
 }
 
 #internal diameter of flow tube
-inDiam = 0.012 # m
+inDiam = 0.024 # m
 
 tubeArea = (pi*(inDiam/2)^2) # m^2
 
@@ -382,7 +382,10 @@ sampleLineParsed$calTransit = transit(density = sampleLineParsed$density,
 TransCrit = print(transit(density = 1.183892, temp = 298.15, ReyNum = 4000, inDiam= inDiam))
 Flowcrit = print(((transit(density = 1.183892, temp = 298.15, ReyNum = 4000, inDiam= inDiam))*tubeArea)/1.666667e-05)
 
-#flow crit = 70.020446 litres per minute
+#flow crit = 70.020446 litres per minute   ##expected for standard litres per second, but ask wes if pressure is reduced
+#nvm wes is not interested in the reynolds number
+#try 200 == 35lpm
+#aerocalc - used to measure turbulence
 #transit speed crit  = 2.586433 m/s
 #70 lmp = 3988.35096 Reynolds number , transit speed = 2.57890006 m/s
 #71 lpm = 4045.32740, transit speed = 2.61574149 m/s
@@ -657,38 +660,102 @@ ggplot(data = pCl_df, aes(x = delta, y = Cl, color = Cl)) +
 # can use read sheets for excel files with more than one sheet ???
 #read.table() has lots of variables e.g one that ignores blank space before a dataframe
 
-
-pCl_filt <- pCl_df %>%
-  mutate(sector = case_when( delta > 0.18 & between(date, ymd("2023-08-01"),ymd("2023-08-04")) ~ "deeppink",
-                             delta > 0.18 & between(date, ymd("2023-08-04"),ymd("2023-08-07")) ~ "steelblue2",
-                             delta > 0.18 & between(date, ymd("2023-08-07"),ymd("2023-08-10")) ~ "maroon",
-                             delta > 0.18 & between(date, ymd("2023-08-14"),ymd("2023-08-18")) ~ "blue",
-                             delta > 0.18 & between(date, ymd("2023-08-18"), ymd("2023-08-22")) ~ "green3",
-                            TRUE ~ "#d19c2f"))  %>%
+pCl_filt2 <- pCl_df %>%
+  mutate(sector = case_when( delta > 0.15 & between(date, ymd("2023-08-01"),ymd("2023-08-04")) ~ "deeppink",
+                             delta > 0.15 & between(date, ymd("2023-08-04"),ymd("2023-08-05")) ~ "steelblue2",
+                             delta > 0.15 & between(date, ymd("2023-08-05"),ymd("2023-08-07")) ~ "seagreen4",
+                             delta > 0.15 & between(date, ymd("2023-08-07"),ymd("2023-08-10")) ~ "red",
+                             delta > 0.15 & between(date, ymd("2023-08-14"),ymd("2023-08-18")) ~ "blue",
+                             delta > 0.15 & between(date, ymd("2023-08-18"), ymd("2023-08-22")) ~ "green3",
+                             is.na(delta) & is.numeric(pCl) ~ "black",
+                             TRUE ~ "#d19c2f"))  %>%
   filter(pCl <= 0.2, gCl <=0.35)
 
-pCL_deet <- pCl_df
-
-#### plot these points as time series
-#mark the different time sections in different colours on plot
-
-#want plots 
-delta_plot<-ggplot(data = pCl_filt, aes(x = delta, y = pCl, color = sector)) +
-  geom_point()+
-  labs(y = "pCl- (µg/m3)", x = "delta (µg/m3)")+
-  scale_y_continuous(breaks = seq(0,0.20, by = 0.02))+
-  scale_color_identity()+scale_x_continuous(breaks = seq(0,0.5, by = 0.05))
-
-ggsave(delta_plot, filename = "C:/Users/grace/Documents/Mchem_project/large_delta_pcl_plot.png", height = 8, width= 12)
-
-date_plot<-ggplot(data = pCl_filt, aes(x = date, y = pCl, color = sector)) +
+date2_plot <- ggplot(data = pCl_filt2, aes(x = date, y = pCl, color = sector)) +
   geom_point()+
   labs(y = "pCl- (µg/m3)", x = "date")+
   scale_y_continuous(breaks = seq(0,0.20, by = 0.02))+
-  scale_color_identity()+
-  scale_x_datetime(date_breaks = "2 day", date_labels = "%b %d")
+  scale_color_manual(
+    values = c( "deeppink" = "deeppink","steelblue2" = "steelblue2","seagreen4"="seagreen4","red" = "red",
+      "blue" = "blue","green3" = "green3","black"= "black","#d19c2f" = "#d19c2f"),
+    breaks = c("deeppink", "steelblue2","seagreen4","red", "blue", "green3","black", "#d19c2f"),
+    labels = c("3am Aug 1 - 1pm Aug 3", "5am -3pm Aug 4","10pm Aug 5 - 6am Aug 6", "2-3am Aug 8", "8pm Aug 15- 10pm Aug 17 ", " 12am - 11pm Aug 20","delta = NA","delta < 0.15"),
+    guide = guide_legend(title = NULL)) +
+  scale_x_datetime(date_breaks = "2 day", date_labels = "%b %d")+
+  theme(legend.position =  "bottom") 
+
+ggsave(date2_plot, filename = "C:/Users/grace/Documents/Mchem_project/new_DATE_large_delt_pCl.png", height = 10, width= 14)
+
+
+delta2 <-ggplot(data = pCl_filt2, aes(x = delta, y = pCl, color = sector)) +
+  geom_point()+
+  labs(y = "pCl- (µg/m3)", x = "delta (µg/m3)")+
+  scale_y_continuous(breaks = seq(0,0.20, by = 0.02))+
+  scale_color_manual(
+    values = c( "deeppink" = "deeppink","steelblue2" = "steelblue2","seagreen4"="seagreen4","red" = "red",
+                "blue" = "blue","green3" = "green3","#d19c2f" = "#d19c2f"),
+    breaks = c("deeppink", "steelblue2","seagreen4","red", "blue", "green3", "#d19c2f"),
+    labels = c("3am Aug 1 - 1pm Aug 3", "5am -3pm Aug 4","10pm Aug 5 - 6am Aug 6", "2-3am Aug 8", "8pm Aug 15- 10pm Aug 17 ", " 12am - 11pm Aug 20","delta < 0.15"),
+    guide = guide_legend(title = NULL))+
+  theme(legend.position =  "bottom")
+
+ggsave(delta2, filename = "C:/Users/grace/Documents/Mchem_project/newsimpler_delt_pCl.png", height = 10, width= 14)
 
 #this short data frame summaries all the coloured in data points
-delt_filt <-pCl_filt %>% 
+#useful when  labeling sections of plots
+delt_filt <-pCl_filt2 %>% 
   filter(sector != "#d19c2f") %>% 
   select(date, pCl, diff,Total_hcl, sector)
+
+
+#next look at the other species for the given points when delta > 0.2
+#(adjust delt_filt for this) & look at creative ways to plot, but first do bar charts ?
+#i would prefer time series, there aren't many datapoints...
+#ask wes if look at particle phase species measurements only?
+
+
+
+new_Cl<-pCl_df%>% select(1,84, 11:37) %>% 
+  rename(gNH4 = "NH4+...7", gDMA = "DMA+...8", gDEA = "DEA+...9", gNO2 = "NO2-...11",
+         gNO3 = "NO3-...12", gSO4 = "SO42-...13", gOxalate= "Oxalate...14", gFormic = "Formic acid",
+         gAcetic = "Acetic acid", pNa = "Na+", pNH4 = "NH4+...19", pNO2 = "NO2-...26",
+         pNO3 = "NO3-...27", pSO4 = "SO42-...28", pOxolate = "Oxalate...29",
+         pPhosphate = "Phosphate...30",pFormate = "Formate...31",pAcetate = "Acetate...32" ) %>%
+  select(!Gas) %>% select(!Particle) %>% select(!pAcetate) %>% select(!pFormate) %>% select(!pPhosphate) 
+
+new1_Cl <- new_Cl %>%
+  pivot_longer(cols = 3:24, names_to = "species", values_to = "conc") %>% filter(delta > 0.15)
+
+print(colnames(new_Cl))
+
+ggplot(new1_Cl,aes(x = date, y = conc, color = species))+
+  geom_point()+
+  facet_wrap(~species,ncol = 4, scale = "free_y")+
+  theme(legend.position =  "bottom")
+
+#now need to separate out the chunks into
+#maybe separate by particle and gas phase measurements?
+#look at bar charts for wes
+
+particle_spec <- new_Cl %>% select(1,2, 13:24) %>% 
+  pivot_longer(cols = 3:14, names_to = "species", values_to = "conc") %>% 
+  filter(delta > 0.15)
+
+particle_plot<-ggplot(particle_spec,aes(x = date, y = conc, color = species))+
+  geom_point()+
+  facet_wrap(~species,ncol = 4, scale = "free_y")+
+  theme(legend.position =  "bottom")
+
+ggsave(particle_plot, filename = "C:/Users/grace/Documents/Mchem_project/particle_spec_delta.png", height = 10, width= 20)
+
+gas_spec <- new_Cl %>% select(1,2, 3:12) %>% 
+  pivot_longer(cols = 3:12, names_to = "species", values_to = "conc") %>% 
+  filter(delta > 0.15)
+
+gas_plot<-ggplot(gas_spec,aes(x = date, y = conc, color = species))+
+  geom_point()+
+  facet_wrap(~species,ncol = 5, scale = "free_y")+
+  theme(legend.position =  "bottom")
+
+ggsave(gas_plot, filename = "C:/Users/grace/Documents/Mchem_project/gas_spec_delta.png", height = 10, width= 20)
+
