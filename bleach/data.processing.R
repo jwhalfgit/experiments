@@ -12,9 +12,9 @@ cimsAvg <- cims[complete.cases(cims),] %>%
   do(tail(.,n = 4L)) %>% 
   #summarize(ts = mean(ts),hno3Avg = mean(hno3), hno3Sd = sd(hno3)) %>% 
   ungroup() %>% 
-  select(-groupings) %>% 
-  write.csv(file.path(EXPTDIR,"BLEACH","data","cims","hno3-avg.csv"),
-          quote = FALSE,row.names = FALSE)
+  select(-groupings) #%>% 
+  # write.csv(file.path(EXPTDIR,"BLEACH","data","cims","hno3-avg.csv"),
+  #         quote = FALSE,row.names = FALSE)
 
 
 # TILDAS data
@@ -25,9 +25,9 @@ tildas <- read_csv(file.path(EXPTDIR,"BLEACH","data","tildas","winter.csv")) %>%
 tildasAvg <- tildas %>% 
   mutate(ts = floor_date(ts, unit = "10 min")) %>% 
   group_by(ts) %>% 
-  summarize(ts = mean(ts), hclAvg = mean(hcl), hclSd = sd(hcl)) %>% 
-  write.csv(file.path(EXPTDIR,"BLEACH","data","tildas","winter-10min-avg.csv"),
-            quote = FALSE,row.names = FALSE)
+  summarize(ts = mean(ts), hclAvg = mean(hcl), hclSd = sd(hcl)) #%>%
+  # write.csv(file.path(EXPTDIR,"BLEACH","data","tildas","winter-10min-avg.csv"),
+  #           quote = FALSE,row.names = FALSE)
 
 # meteorology data
 met <- read_csv(file.path(EXPTDIR,"BLEACH","data","met","winter-met.dat")) %>% 
@@ -59,15 +59,25 @@ nox <- read_csv(file.path(EXPTDIR,"BLEACH","data","nox","winter-nox.csv")) %>%
   summarize_all(mean)
 
 bigDF <- tildasAvg %>% 
+  filter(!between(ts,ymd_hms("2023-01-29 17:45:00"),ymd_hms("2023-01-30 02:00:00"))) %>% 
   full_join(met) %>% 
   full_join(uwCims) %>% 
   full_join(nox) %>% 
   mutate(no = na.approx(NO_ppt_filt, rule = 2)) %>% 
-  mutate(no2 = na.approx(NO_ppt_filt, rule = 2)) %>% 
+  mutate(no2 = na.approx(NO2_ppt_filt, rule = 2)) %>% 
   mutate(nox = na.approx(NOx_ppt_filt, rule = 2)) %>% 
   full_join(gc) %>% 
   arrange(ts) %>% 
   filter(between(ts,ymd_hms("2023-01-26 00:00:00"), ymd_hms("2023-02-23 00:00:00")))
+ 
+
+bigDF$flag = 0
+bigDF$flag[which(bigDF$no > 50 | bigDF$no2 > 200)] <- 1
+write.csv(bigDF, "G:/My Drive/Experiments/BLEACH/winter-bigDF.csv",
+          quote = FALSE, row.names = FALSE)
+  
+  
+  
 
 # FILTERING.
 
@@ -131,13 +141,13 @@ regimeFilter <- function(DF = bigDF, METHOD = "wind", REGIME = "clean",
   }else if(METHOD == "nox"){
     if(REGIME == "clean"){
       outDF <- DF %>% 
-                left_join(nox) %>% 
+                #left_join(nox) %>% # bigDF already includes the nox data
                 filter(no <= 50 & no2 <= 200) %>% 
                 rename(date = "ts")
       
     }else if(REGIME == "dirty"){
       outDF <- DF %>% 
-                left_join(nox) %>% 
+                #left_join(nox) %>% # bigDF already includes the nox data
                 filter(no > 50 | no2 > 200) %>% 
                 rename(date = "ts")
     }
@@ -199,20 +209,55 @@ bigDFDirty_n <- bigDFDirtyNox %>%
 # Meteorology filters
 cleanHclOut <- timeVariation(bigDFClean,
                           pollutant = "hclAvg",xlab = "hour")$data$hour %>% 
-  write.csv(file.path(EXPTDIR,"BLEACH","winter-cleanDiurnal.csv"),
+  mutate(Lower = Mean - Lower) %>% 
+  mutate(Upper = Upper - Mean) %>% 
+  write.csv(file.path(EXPTDIR,"BLEACH","hcl-winter-cleanDiurnal.csv"),
             quote = FALSE,row.names = FALSE)
 
 
 uwCimsCleanCl2 <- timeVariation(bigDFClean,
                                 pollutant=c("cl2"),type = "hour")$data$hour %>% 
+  mutate(Lower = Mean - Lower) %>% 
+  mutate(Upper = Upper - Mean) %>% 
   write.csv(file.path(EXPTDIR,"BLEACH","cl2-winter-CleanDiurnal.csv"),
             quote = FALSE,row.names = FALSE)
 
 
 uwCimsCleanClno2 <- timeVariation(bigDFClean,
                                   pollutant=c("clno2"),type = "hour")$data$hour %>% 
+  mutate(Lower = Mean - Lower) %>% 
+  mutate(Upper = Upper - Mean) %>% 
   write.csv(file.path(EXPTDIR,"BLEACH","clno2-winter-CleanDiurnal.csv"),
             quote = FALSE,row.names = FALSE)
+
+
+cleanNox <- timeVariation(bigDFClean,
+                          pollutant = "nox",xlab = "hour", 
+                          plot = FALSE)$data$hour %>% 
+  mutate(Lower = Mean - Lower) %>% 
+  mutate(Upper = Upper - Mean) %>% 
+  write.csv(file.path(EXPTDIR,"BLEACH","nox-winter-cleanDiurnal.csv"),
+            quote = FALSE,row.names = FALSE)
+
+
+cleanNo <- timeVariation(bigDFClean,
+                         pollutant = "no",xlab = "hour", 
+                         plot = FALSE)$data$hour %>% 
+  mutate(Lower = Mean - Lower) %>% 
+  mutate(Upper = Upper - Mean) %>% 
+  write.csv(file.path(EXPTDIR,"BLEACH","no-winter-cleanDiurnal.csv"),
+            quote = FALSE,row.names = FALSE)
+
+cleanNo2 <- timeVariation(bigDFClean,
+                          pollutant = "no2",xlab = "hour", 
+                          plot = FALSE)$data$hour %>% 
+  mutate(Lower = Mean - Lower) %>% 
+  mutate(Upper = Upper - Mean) %>% 
+  write.csv(file.path(EXPTDIR,"BLEACH","no2-winter-cleanDiurnal.csv"),
+            quote = FALSE,row.names = FALSE)
+
+
+
 
 # 
 # gchemClean <- gc %>% 
@@ -224,6 +269,8 @@ uwCimsCleanClno2 <- timeVariation(bigDFClean,
 gchemCleanHcl <- timeVariation(bigDFClean,
                                 pollutant=c("HCl_gc"),type = "hour",
                                plot = FALSE)$data$hour %>% 
+  mutate(Lower = Mean - Lower) %>% 
+  mutate(Upper = Upper - Mean) %>% 
 write.csv(file.path(EXPTDIR,"BLEACH","gchem-hcl-winter-cleanDiurnal.csv"),
           quote = FALSE,row.names = FALSE)
 
@@ -231,18 +278,24 @@ write.csv(file.path(EXPTDIR,"BLEACH","gchem-hcl-winter-cleanDiurnal.csv"),
 gchemCleanClno2 <- timeVariation(bigDFClean,
                                pollutant=c("ClNO2_gc"),type = "hour",
                                plot = FALSE)$data$hour %>% 
+  mutate(Lower = Mean - Lower) %>% 
+  mutate(Upper = Upper - Mean) %>% 
 write.csv(file.path(EXPTDIR,"BLEACH","gchem-clno2-winter-cleanDiurnal.csv"),
           quote = FALSE,row.names = FALSE)
 
 gchemCleanCl2 <- timeVariation(bigDFClean,
                                pollutant=c("Cl2_gc"),type = "hour",
                                plot = FALSE)$data$hour %>% 
+  mutate(Lower = Mean - Lower) %>% 
+  mutate(Upper = Upper - Mean) %>% 
 write.csv(file.path(EXPTDIR,"BLEACH","gchem-cl2-winter-cleanDiurnal.csv"),
           quote = FALSE,row.names = FALSE)
 
 gchemCleanNox <- timeVariation(bigDFClean,
                                pollutant=c("NOx_gc"),type = "hour",
                                plot = FALSE)$data$hour %>% 
+  mutate(Lower = Mean - Lower) %>% 
+  mutate(Upper = Upper - Mean) %>% 
 write.csv(file.path(EXPTDIR,"BLEACH","gchem-nox-winter-cleanDiurnal.csv"),
           quote = FALSE,row.names = FALSE)
 ######################################################################
@@ -250,13 +303,17 @@ write.csv(file.path(EXPTDIR,"BLEACH","gchem-nox-winter-cleanDiurnal.csv"),
 cleanHclOut <- timeVariation(bigDFCleanNox,
                              pollutant = "hclAvg",xlab = "hour",
                              plot = FALSE)$data$hour %>% 
-  write.csv(file.path(EXPTDIR,"BLEACH","winter-cleanNoxDiurnal.csv"),
+  mutate(Lower = Mean - Lower) %>% 
+  mutate(Upper = Upper - Mean) %>% 
+  write.csv(file.path(EXPTDIR,"BLEACH","hcl-winter-cleanNoxDiurnal.csv"),
             quote = FALSE,row.names = FALSE)
 
 
 uwCimsCleanCl2 <- timeVariation(bigDFCleanNox,
                                 pollutant=c("cl2"),type = "hour",
                                 plot = FALSE)$data$hour %>% 
+  mutate(Lower = Mean - Lower) %>% 
+  mutate(Upper = Upper - Mean) %>% 
   write.csv(file.path(EXPTDIR,"BLEACH","cl2-winter-CleanNoxDiurnal.csv"),
             quote = FALSE,row.names = FALSE)
 
@@ -264,8 +321,36 @@ uwCimsCleanCl2 <- timeVariation(bigDFCleanNox,
 uwCimsCleanClno2 <- timeVariation(bigDFCleanNox,
                                   pollutant=c("clno2"),type = "hour",
                                   plot = FALSE)$data$hour %>% 
+  mutate(Lower = Mean - Lower) %>% 
+  mutate(Upper = Upper - Mean) %>% 
   write.csv(file.path(EXPTDIR,"BLEACH","clno2-winter-CleanNoxDiurnal.csv"),
             quote = FALSE,row.names = FALSE)
+
+cleanNox <- timeVariation(bigDFCleanNox,
+                          pollutant = "nox",xlab = "hour", 
+                          plot = FALSE)$data$hour %>% 
+  mutate(Lower = Mean - Lower) %>% 
+  mutate(Upper = Upper - Mean) %>% 
+  write.csv(file.path(EXPTDIR,"BLEACH","nox-winter-cleanNoxDiurnal.csv"),
+            quote = FALSE,row.names = FALSE)
+
+
+cleanNo <- timeVariation(bigDFCleanNox,
+                         pollutant = "no",xlab = "hour", 
+                         plot = FALSE)$data$hour %>% 
+  mutate(Lower = Mean - Lower) %>% 
+  mutate(Upper = Upper - Mean) %>% 
+  write.csv(file.path(EXPTDIR,"BLEACH","no-winter-cleanNoxDiurnal.csv"),
+            quote = FALSE,row.names = FALSE)
+
+cleanNo2 <- timeVariation(bigDFCleanNox,
+                          pollutant = "no2",xlab = "hour", 
+                          plot = FALSE)$data$hour %>% 
+  mutate(Lower = Mean - Lower) %>% 
+  mutate(Upper = Upper - Mean) %>% 
+  write.csv(file.path(EXPTDIR,"BLEACH","no2-winter-cleanNoxDiurnal.csv"),
+            quote = FALSE,row.names = FALSE)
+
 
 # 
 # gchemClean <- gc %>% 
@@ -277,6 +362,8 @@ uwCimsCleanClno2 <- timeVariation(bigDFCleanNox,
 gchemCleanHcl <- timeVariation(bigDFCleanNox,
                                pollutant=c("HCl_gc"),type = "hour",
                                plot = FALSE)$data$hour %>% 
+  mutate(Lower = Mean - Lower) %>% 
+  mutate(Upper = Upper - Mean) %>% 
   write.csv(file.path(EXPTDIR,"BLEACH","gchem-hcl-winter-cleanNoxDiurnal.csv"),
             quote = FALSE,row.names = FALSE)
 
@@ -284,18 +371,24 @@ gchemCleanHcl <- timeVariation(bigDFCleanNox,
 gchemCleanClno2 <- timeVariation(bigDFCleanNox,
                                  pollutant=c("ClNO2_gc"),type = "hour",
                                  plot = FALSE)$data$hour %>% 
+  mutate(Lower = Mean - Lower) %>% 
+  mutate(Upper = Upper - Mean) %>% 
   write.csv(file.path(EXPTDIR,"BLEACH","gchem-clno2-winter-cleanNoxDiurnal.csv"),
             quote = FALSE,row.names = FALSE)
 
 gchemCleanCl2 <- timeVariation(bigDFCleanNox,
                                pollutant=c("Cl2_gc"),type = "hour",
                                plot = FALSE)$data$hour %>% 
+  mutate(Lower = Mean - Lower) %>% 
+  mutate(Upper = Upper - Mean) %>% 
   write.csv(file.path(EXPTDIR,"BLEACH","gchem-cl2-winter-cleanNoxDiurnal.csv"),
             quote = FALSE,row.names = FALSE)
 
 gchemCleanNox <- timeVariation(bigDFCleanNox,
                                pollutant=c("NOx_gc"),type = "hour",
-                               plot = FALSE)$data$hour %>% 
+                               plot = FALSE)$data$hour %>%
+  mutate(Lower = Mean - Lower) %>% 
+  mutate(Upper = Upper - Mean) %>% 
   write.csv(file.path(EXPTDIR,"BLEACH","gchem-nox-winter-cleanNoxDiurnal.csv"),
             quote = FALSE,row.names = FALSE)
 
@@ -307,24 +400,32 @@ gchemCleanNox <- timeVariation(bigDFCleanNox,
 gchemDirtyHcl <- timeVariation(bigDFDirty,
                                pollutant=c("HCl_gc"),type = "hour",
                                plot = FALSE)$data$hour %>% 
+  mutate(Lower = Mean - Lower) %>% 
+  mutate(Upper = Upper - Mean) %>% 
   write.csv(file.path(EXPTDIR,"BLEACH","gchem-hcl-winter-DirtyDiurnal.csv"),
             quote = FALSE,row.names = FALSE)
 
 gchemDirtyClno2 <- timeVariation(bigDFDirty,
                                  pollutant=c("ClNO2_gc"),type = "hour",
                                  plot = FALSE)$data$hour %>% 
+  mutate(Lower = Mean - Lower) %>% 
+  mutate(Upper = Upper - Mean) %>% 
   write.csv(file.path(EXPTDIR,"BLEACH","gchem-clno2-winter-DirtyDiurnal.csv"),
             quote = FALSE,row.names = FALSE)
 
 gchemDirtyCl2 <- timeVariation(bigDFDirty,
                                pollutant=c("Cl2_gc"),type = "hour",
                                plot = FALSE)$data$hour %>% 
+  mutate(Lower = Mean - Lower) %>% 
+  mutate(Upper = Upper - Mean) %>% 
   write.csv(file.path(EXPTDIR,"BLEACH","gchem-cl2-winter-DirtyDiurnal.csv"),
             quote = FALSE,row.names = FALSE)
 
 gchemDirtyNox <- timeVariation(bigDFDirty,
                                pollutant=c("NOx_gc"),type = "hour",
                                plot = FALSE)$data$hour %>% 
+  mutate(Lower = Mean - Lower) %>% 
+  mutate(Upper = Upper - Mean) %>% 
   write.csv(file.path(EXPTDIR,"BLEACH","gchem-nox-winter-DirtyDiurnal.csv"),
             quote = FALSE,row.names = FALSE)
 
@@ -333,6 +434,8 @@ gchemDirtyNox <- timeVariation(bigDFDirty,
 dirtyHclOut <- timeVariation(bigDFDirty,
                              pollutant = "hclAvg",xlab = "hour",
                              plot = FALSE)$data$hour %>% 
+  mutate(Lower = Mean - Lower) %>% 
+  mutate(Upper = Upper - Mean) %>% 
   write.csv(file.path(EXPTDIR,"BLEACH","winter-dirtyDiurnal.csv"),
             quote = FALSE,row.names = FALSE)
 
@@ -340,6 +443,8 @@ dirtyHclOut <- timeVariation(bigDFDirty,
 uwCimsDirtyCl2 <- timeVariation(bigDFDirty,
                                 pollutant=c("cl2"),type = "hour",
                                 plot = FALSE)$data$hour %>% 
+  mutate(Lower = Mean - Lower) %>% 
+  mutate(Upper = Upper - Mean) %>% 
   write.csv(file.path(EXPTDIR,"BLEACH","cl2-winter-dirtyDiurnal.csv"),
             quote = FALSE,row.names = FALSE)
 
@@ -347,10 +452,36 @@ uwCimsDirtyCl2 <- timeVariation(bigDFDirty,
 uwCimsDirtyClno2 <- timeVariation(bigDFDirty,
                                   pollutant=c("clno2"),type = "hour",
                                   plot = FALSE)$data$hour %>% 
+  mutate(Lower = Mean - Lower) %>% 
+  mutate(Upper = Upper - Mean) %>% 
   write.csv(file.path(EXPTDIR,"BLEACH","clno2-winter-dirtyDiurnal.csv"),
             quote = FALSE,row.names = FALSE)
 
 
+dirtyNox <- timeVariation(bigDFDirty,
+                          pollutant = "nox",xlab = "hour", 
+                          plot = FALSE)$data$hour %>% 
+  mutate(Lower = Mean - Lower) %>% 
+  mutate(Upper = Upper - Mean) %>% 
+  write.csv(file.path(EXPTDIR,"BLEACH","nox-winter-dirtyDiurnal.csv"),
+            quote = FALSE,row.names = FALSE)
+
+
+dirtyNo <- timeVariation(bigDFDirty,
+                         pollutant = "no",xlab = "hour", 
+                         plot = FALSE)$data$hour %>% 
+  mutate(Lower = Mean - Lower) %>% 
+  mutate(Upper = Upper - Mean) %>% 
+  write.csv(file.path(EXPTDIR,"BLEACH","no-winter-dirtyDiurnal.csv"),
+            quote = FALSE,row.names = FALSE)
+
+dirtyNo2 <- timeVariation(bigDFDirty,
+                          pollutant = "no2",xlab = "hour", 
+                          plot = FALSE)$data$hour %>% 
+  mutate(Lower = Mean - Lower) %>% 
+  mutate(Upper = Upper - Mean) %>% 
+  write.csv(file.path(EXPTDIR,"BLEACH","no2-winter-dirtyDiurnal.csv"),
+            quote = FALSE,row.names = FALSE)
 
 
 ######################################################################
@@ -358,25 +489,33 @@ uwCimsDirtyClno2 <- timeVariation(bigDFDirty,
 
 gchemDirtyHcl <- timeVariation(bigDFDirtyNox,
                                pollutant=c("HCl_gc"),type = "hour",
-                               plot = FALSE)$data$hour %>% 
+                               plot = FALSE)$data$hour %>% #
+  mutate(Lower = Mean - Lower) %>% 
+  mutate(Upper = Upper - Mean) %>% 
   write.csv(file.path(EXPTDIR,"BLEACH","gchem-hcl-winter-DirtyNoxDiurnal.csv"),
             quote = FALSE,row.names = FALSE)
 
 gchemDirtyClno2 <- timeVariation(bigDFDirtyNox,
                                  pollutant=c("ClNO2_gc"),type = "hour",
                                  plot = FALSE)$data$hour %>% 
+  mutate(Lower = Mean - Lower) %>% 
+  mutate(Upper = Upper - Mean) %>% 
   write.csv(file.path(EXPTDIR,"BLEACH","gchem-clno2-winter-DirtyNoxDiurnal.csv"),
             quote = FALSE,row.names = FALSE)
 
 gchemDirtyCl2 <- timeVariation(bigDFDirtyNox,
                                pollutant=c("Cl2_gc"),type = "hour",
                                plot = FALSE)$data$hour %>% 
+  mutate(Lower = Mean - Lower) %>% 
+  mutate(Upper = Upper - Mean) %>% 
   write.csv(file.path(EXPTDIR,"BLEACH","gchem-cl2-winter-DirtyNoxDiurnal.csv"),
             quote = FALSE,row.names = FALSE)
 
 gchemDirtyNox <- timeVariation(bigDFDirtyNox,
                                pollutant=c("NOx_gc"),type = "hour",
                                plot = FALSE)$data$hour %>% 
+  mutate(Lower = Mean - Lower) %>% 
+  mutate(Upper = Upper - Mean) %>% 
   write.csv(file.path(EXPTDIR,"BLEACH","gchem-nox-winter-DirtyNoxDiurnal.csv"),
             quote = FALSE,row.names = FALSE)
 
@@ -385,6 +524,8 @@ gchemDirtyNox <- timeVariation(bigDFDirtyNox,
 dirtyHclOut <- timeVariation(bigDFDirtyNox,
                              pollutant = "hclAvg",xlab = "hour",
                              plot = FALSE)$data$hour %>% 
+  mutate(Lower = Mean - Lower) %>% 
+  mutate(Upper = Upper - Mean) %>% 
   write.csv(file.path(EXPTDIR,"BLEACH","winter-dirtyNoxDiurnal.csv"),
             quote = FALSE,row.names = FALSE)
 
@@ -392,6 +533,8 @@ dirtyHclOut <- timeVariation(bigDFDirtyNox,
 uwCimsDirtyCl2 <- timeVariation(bigDFDirtyNox,
                                 pollutant=c("cl2"),type = "hour",
                                 plot = FALSE)$data$hour %>% 
+  mutate(Lower = Mean - Lower) %>% 
+  mutate(Upper = Upper - Mean) %>% 
   write.csv(file.path(EXPTDIR,"BLEACH","cl2-winter-dirtyNoxDiurnal.csv"),
             quote = FALSE,row.names = FALSE)
 
@@ -399,14 +542,44 @@ uwCimsDirtyCl2 <- timeVariation(bigDFDirtyNox,
 uwCimsDirtyClno2 <- timeVariation(bigDFDirtyNox,
                                   pollutant=c("clno2"),type = "hour",
                                   plot = FALSE)$data$hour %>% 
+  mutate(Lower = Mean - Lower) %>% 
+  mutate(Upper = Upper - Mean) %>% 
   write.csv(file.path(EXPTDIR,"BLEACH","clno2-winter-dirtyNoxDiurnal.csv"),
             quote = FALSE,row.names = FALSE)
 
 
+dirtyNox <- timeVariation(bigDFDirtyNox,
+                          pollutant = "nox",xlab = "hour", 
+                          plot = FALSE)$data$hour %>% 
+  mutate(Lower = Mean - Lower) %>% 
+  mutate(Upper = Upper - Mean) %>% 
+  write.csv(file.path(EXPTDIR,"BLEACH","nox-winter-dirtyDiurnal.csv"),
+            quote = FALSE,row.names = FALSE)
+
+
+dirtyNo <- timeVariation(bigDFDirtyNox,
+                         pollutant = "no",xlab = "hour", 
+                         plot = FALSE)$data$hour %>% 
+  mutate(Lower = Mean - Lower) %>% 
+  mutate(Upper = Upper - Mean) %>% 
+  write.csv(file.path(EXPTDIR,"BLEACH","no-winter-dirtyNoxDiurnal.csv"),
+            quote = FALSE,row.names = FALSE)
+
+dirtyNo2 <- timeVariation(bigDFDirtyNox,
+                          pollutant = "no2",xlab = "hour", 
+                          plot = FALSE)$data$hour %>% 
+  mutate(Lower = Mean - Lower) %>% 
+  mutate(Upper = Upper - Mean) %>% 
+  write.csv(file.path(EXPTDIR,"BLEACH","no2-winter-dirtyNoxDiurnal.csv"),
+            quote = FALSE,row.names = FALSE)
+
 # specrad
 specrad <- read_csv(file.path(EXPTDIR,
                               "BLEACH","data","specrad","winter-specrad.csv")) %>% 
-  mutate(date = ts)
+  mutate(date = ts) %>% 
+  arrange(ts)
+write.csv(specrad, "G:/My Drive/Experiments/BLEACH/data/specrad/winter-specrad.csv",
+          row.names = FALSE,quote=FALSE)
 
 specradDiurnal <- timeVariation(specrad, 
                                 pollutant = "j(no2)",type = "hour")$data$hour %>% 
@@ -425,9 +598,9 @@ tildasAvg <- tildas %>%
   group_by(ts) %>% 
   summarize(ts = mean(ts), hclAvg = mean(hcl), hclSd = sd(hcl), 
             hclCorr = mean(HCl_dailyoffset_BgCorr), 
-            hclCorrSd = sd(HCl_dailyoffset_BgCorr)) %>% 
-  write.csv(file.path(EXPTDIR,"BLEACH","data","tildas","summer-10min-avg.csv"),
-            quote = FALSE,row.names = FALSE)
+            hclCorrSd = sd(HCl_dailyoffset_BgCorr))# %>% 
+  #write.csv(file.path(EXPTDIR,"BLEACH","data","tildas","summer-10min-avg.csv"),
+ #           quote = FALSE,row.names = FALSE)
 
 
 
@@ -442,9 +615,9 @@ iclAvg <- icl %>%
   mutate(ts = floor_date(ts, unit = "10 min")) %>% 
   group_by(ts) %>% 
   summarize(ts = mean(ts), icl2Avg = mean(icl2), icl2Sd = sd(icl2),
-            iclno2Avg = mean(iclno2), iclno2Sd = sd(iclno2)) %>% 
-  write.csv(file.path(EXPTDIR,"BLEACH","data","cims","summer-icl-avg-utc.csv"),
-            quote = FALSE,row.names = FALSE)
+            iclno2Avg = mean(iclno2), iclno2Sd = sd(iclno2))# %>% 
+  #write.csv(file.path(EXPTDIR,"BLEACH","data","cims","summer-icl-avg-utc.csv"),
+            #quote = FALSE,row.names = FALSE)
 
   
 
@@ -457,9 +630,9 @@ brclAvg <- brcl %>%
   mutate(ts = floor_date(ts, unit = "10 min")) %>% 
   group_by(ts) %>% 
   summarize(ts = mean(ts), brcl2Avg = mean(brcl2), brcl2Sd = sd(brcl2),
-            brclno2Avg = mean(brclno2), brclno2Sd = sd(brclno2)) %>% 
-  write.csv(file.path(EXPTDIR,"BLEACH","data","cims","summer-brcl-avg-utc.csv"),
-            quote = FALSE,row.names = FALSE)
+            brclno2Avg = mean(brclno2), brclno2Sd = sd(brclno2)) #%>% 
+  # write.csv(file.path(EXPTDIR,"BLEACH","data","cims","summer-brcl-avg-utc.csv"),
+  #           quote = FALSE,row.names = FALSE)
 
 
 in2o5 <- read_csv(file.path(EXPTDIR,"BLEACH","data","cims","summer_in2o5_local.csv")) %>% 
@@ -472,9 +645,9 @@ in2o5Avg<- in2o5 %>%
   mutate(ts = floor_date(ts, unit = "10 min")) %>% 
   group_by(ts) %>% 
   summarize(ts = mean(ts), in2o5Avg = mean(n2o5), 
-            in2o5Sd = sd(n2o5)) %>% 
-  write.csv(file.path(EXPTDIR,"BLEACH","data","cims","summer-in2o5-avg-utc.csv"),
-            quote = FALSE,row.names = FALSE)
+            in2o5Sd = sd(n2o5)) #%>% 
+ # write.csv(file.path(EXPTDIR,"BLEACH","data","cims","summer-in2o5-avg-utc.csv"),
+ #           quote = FALSE,row.names = FALSE)
 
 nox <- read_csv(file.path(EXPTDIR,"BLEACH","data","nox","summer-nox.csv")) %>% 
   select(ts, NO_ppt_filt,NO2_ppt_filt, NOx_ppt_filt) %>% 
@@ -494,22 +667,32 @@ met <- read_csv(file.path(EXPTDIR,"BLEACH","data","met","summer-met.dat")) %>%
 
 # GEOS Chem
 gc <- read_csv(file.path(EXPTDIR,
-                         "BLEACH","data","geoschem","summer.csv"))
+                         "BLEACH","data","geoschem","summer.csv")) %>% 
+  rename_with(~ paste0(.x, "_gc")) %>% 
+  rename(ts = ts_gc)
+  
 
 
 bigDF <- tildasAvg %>% 
+  filter(hclCorr > -0.1) %>% 
   full_join(met) %>% 
   full_join(iclAvg) %>% 
   full_join(brclAvg) %>% 
   full_join(in2o5Avg) %>% 
   full_join(nox) %>% 
   mutate(no = na.approx(NO_ppt_filt, rule = 2)) %>% 
-  mutate(no2 = na.approx(NO_ppt_filt, rule = 2)) %>% 
+  mutate(no2 = na.approx(NO2_ppt_filt, rule = 2)) %>% 
   mutate(nox = na.approx(NOx_ppt_filt, rule = 2)) %>% 
   full_join(gc) %>% 
   arrange(ts) %>% 
   filter(between(ts,ymd_hms("2022-06-08 00:00:00"), 
                  ymd_hms("2022-06-28 00:00:00")))
+
+bigDF$flag = 0
+bigDF$flag[which(bigDF$no > 50 | bigDF$no2 > 200)] <- 1
+write.csv(bigDF, "G:/My Drive/Experiments/BLEACH/summer-bigDF.csv",
+          quote = FALSE, row.names = FALSE)
+
 
 
 bigDFClean <- regimeFilter(DF = bigDF, METHOD = "wind", REGIME = "clean",
@@ -563,6 +746,8 @@ bigDFDirty_n <- bigDFDirtyNox %>%
 cleanHclOut <- timeVariation(bigDFClean,
                              pollutant = "hclCorr",xlab = "hour", 
                              plot = FALSE)$data$hour %>% 
+  mutate(Lower = Mean - Lower) %>% 
+  mutate(Upper = Upper - Mean) %>% 
   write.csv(file.path(EXPTDIR,"BLEACH","hcl-summer-cleanDiurnal.csv"),
             quote = FALSE,row.names = FALSE)
 
@@ -570,6 +755,8 @@ cleanHclOut <- timeVariation(bigDFClean,
 uwCimsCleanCl2 <- timeVariation(bigDFClean,
                                 pollutant=c("brcl2Avg"),type = "hour",
                                 plot = FALSE)$data$hour %>% 
+  mutate(Lower = Mean - Lower) %>% 
+  mutate(Upper = Upper - Mean) %>% 
   write.csv(file.path(EXPTDIR,"BLEACH","cl2-summer-CleanDiurnal.csv"),
             quote = FALSE,row.names = FALSE)
 
@@ -577,6 +764,8 @@ uwCimsCleanCl2 <- timeVariation(bigDFClean,
 uwCimsCleanClno2 <- timeVariation(bigDFClean,
                                   pollutant=c("iclno2Avg"),type = "hour",
                                   plot = FALSE)$data$hour %>% 
+  mutate(Lower = Mean - Lower) %>% 
+  mutate(Upper = Upper - Mean) %>% 
   write.csv(file.path(EXPTDIR,"BLEACH","clno2-summer-CleanDiurnal.csv"),
             quote = FALSE,row.names = FALSE)
 
@@ -585,6 +774,8 @@ uwCimsCleanClno2 <- timeVariation(bigDFClean,
 cleanNox <- timeVariation(bigDFClean,
                           pollutant = "nox",xlab = "hour", 
                           plot = FALSE)$data$hour %>% 
+  mutate(Lower = Mean - Lower) %>% 
+  mutate(Upper = Upper - Mean) %>% 
   write.csv(file.path(EXPTDIR,"BLEACH","nox-summer-cleanDiurnal.csv"),
             quote = FALSE,row.names = FALSE)
 
@@ -592,12 +783,16 @@ cleanNox <- timeVariation(bigDFClean,
 cleanNo <- timeVariation(bigDFClean,
                           pollutant = "no",xlab = "hour", 
                           plot = FALSE)$data$hour %>% 
+  mutate(Lower = Mean - Lower) %>% 
+  mutate(Upper = Upper - Mean) %>% 
   write.csv(file.path(EXPTDIR,"BLEACH","no-summer-cleanDiurnal.csv"),
             quote = FALSE,row.names = FALSE)
 
 cleanNo2 <- timeVariation(bigDFClean,
                           pollutant = "no2",xlab = "hour", 
                           plot = FALSE)$data$hour %>% 
+  mutate(Lower = Mean - Lower) %>% 
+  mutate(Upper = Upper - Mean) %>% 
   write.csv(file.path(EXPTDIR,"BLEACH","no2-summer-cleanDiurnal.csv"),
             quote = FALSE,row.names = FALSE)
 
@@ -606,6 +801,8 @@ cleanNo2 <- timeVariation(bigDFClean,
 gchemCleanHcl <- timeVariation(bigDFClean,
                                pollutant=c("HCl_gc"),type = "hour",
                                plot = FALSE)$data$hour %>% 
+  mutate(Lower = Mean - Lower) %>% 
+  mutate(Upper = Upper - Mean) %>% 
   write.csv(file.path(EXPTDIR,"BLEACH","gchem-hcl-summer-cleanDiurnal.csv"),
             quote = FALSE,row.names = FALSE)
 
@@ -613,25 +810,33 @@ gchemCleanHcl <- timeVariation(bigDFClean,
 gchemCleanClno2 <- timeVariation(bigDFClean,
                                  pollutant=c("ClNO2_gc"),type = "hour",
                                  plot = FALSE)$data$hour %>% 
+  mutate(Lower = Mean - Lower) %>% 
+  mutate(Upper = Upper - Mean) %>% 
   write.csv(file.path(EXPTDIR,"BLEACH","gchem-clno2-summer-cleanDiurnal.csv"),
             quote = FALSE,row.names = FALSE)
 
 gchemCleanCl2 <- timeVariation(bigDFClean,
                                pollutant=c("Cl2_gc"),type = "hour",
                                plot = FALSE)$data$hour %>% 
+  mutate(Lower = Mean - Lower) %>% 
+  mutate(Upper = Upper - Mean) %>% 
   write.csv(file.path(EXPTDIR,"BLEACH","gchem-cl2-summer-cleanDiurnal.csv"),
             quote = FALSE,row.names = FALSE)
 
 gchemCleanNox <- timeVariation(bigDFClean,
-                               pollutant=c("NOx_gc"),type = "hour",
+                               pollutant=c("Nox_gc"),type = "hour",
                                plot = FALSE)$data$hour %>% 
+  mutate(Lower = Mean - Lower) %>% 
+  mutate(Upper = Upper - Mean) %>% 
   write.csv(file.path(EXPTDIR,"BLEACH","gchem-nox-summer-cleanDiurnal.csv"),
             quote = FALSE,row.names = FALSE)
 ######################################################################
 # NOx filters
 cleanHclOut <- timeVariation(bigDFCleanNox,
-                             pollutant = "hclAvg",xlab = "hour",
+                             pollutant = "hclCorr",xlab = "hour",
                              plot = FALSE)$data$hour %>% 
+  mutate(Lower = Mean - Lower) %>% 
+  mutate(Upper = Upper - Mean) %>% 
   write.csv(file.path(EXPTDIR,"BLEACH","hcl-summer-cleanNoxDiurnal.csv"),
             quote = FALSE,row.names = FALSE)
 
@@ -639,13 +844,17 @@ cleanHclOut <- timeVariation(bigDFCleanNox,
 uwCimsCleanCl2 <- timeVariation(bigDFCleanNox,
                                 pollutant=c("brcl2Avg"),type = "hour",
                                 plot = FALSE)$data$hour %>% 
+  mutate(Lower = Mean - Lower) %>% 
+  mutate(Upper = Upper - Mean) %>% 
   write.csv(file.path(EXPTDIR,"BLEACH","cl2-summer-CleanNoxDiurnal.csv"),
             quote = FALSE,row.names = FALSE)
 
 
 uwCimsCleanClno2 <- timeVariation(bigDFCleanNox,
-                                  pollutant=c("iclno2"),type = "hour",
+                                  pollutant=c("iclno2Avg"),type = "hour",
                                   plot = FALSE)$data$hour %>% 
+  mutate(Lower = Mean - Lower) %>% 
+  mutate(Upper = Upper - Mean) %>% 
   write.csv(file.path(EXPTDIR,"BLEACH","clno2-summer-CleanNoxDiurnal.csv"),
             quote = FALSE,row.names = FALSE)
 
@@ -654,6 +863,8 @@ uwCimsCleanClno2 <- timeVariation(bigDFCleanNox,
 cleanNox <- timeVariation(bigDFCleanNox,
                           pollutant = "nox",xlab = "hour", 
                           plot = FALSE)$data$hour %>% 
+  mutate(Lower = Mean - Lower) %>% 
+  mutate(Upper = Upper - Mean) %>% 
   write.csv(file.path(EXPTDIR,"BLEACH","nox-summer-cleanNoxDiurnal.csv"),
             quote = FALSE,row.names = FALSE)
 
@@ -661,12 +872,16 @@ cleanNox <- timeVariation(bigDFCleanNox,
 cleanNo <- timeVariation(bigDFCleanNox,
                          pollutant = "no",xlab = "hour", 
                          plot = FALSE)$data$hour %>% 
+  mutate(Lower = Mean - Lower) %>% 
+  mutate(Upper = Upper - Mean) %>% 
   write.csv(file.path(EXPTDIR,"BLEACH","no-summer-cleanNoxDiurnal.csv"),
             quote = FALSE,row.names = FALSE)
 
 cleanNo2 <- timeVariation(bigDFCleanNox,
                           pollutant = "no2",xlab = "hour", 
                           plot = FALSE)$data$hour %>% 
+  mutate(Lower = Mean - Lower) %>% 
+  mutate(Upper = Upper - Mean) %>% 
   write.csv(file.path(EXPTDIR,"BLEACH","no2-summer-cleanNoxDiurnal.csv"),
             quote = FALSE,row.names = FALSE)
 
@@ -680,6 +895,8 @@ cleanNo2 <- timeVariation(bigDFCleanNox,
 gchemCleanHcl <- timeVariation(bigDFCleanNox,
                                pollutant=c("HCl_gc"),type = "hour",
                                plot = FALSE)$data$hour %>% 
+  mutate(Lower = Mean - Lower) %>% 
+  mutate(Upper = Upper - Mean) %>% 
   write.csv(file.path(EXPTDIR,"BLEACH","gchem-hcl-summer-cleanNoxDiurnal.csv"),
             quote = FALSE,row.names = FALSE)
 
@@ -687,18 +904,24 @@ gchemCleanHcl <- timeVariation(bigDFCleanNox,
 gchemCleanClno2 <- timeVariation(bigDFCleanNox,
                                  pollutant=c("ClNO2_gc"),type = "hour",
                                  plot = FALSE)$data$hour %>% 
+  mutate(Lower = Mean - Lower) %>% 
+  mutate(Upper = Upper - Mean) %>% 
   write.csv(file.path(EXPTDIR,"BLEACH","gchem-clno2-summer-cleanNoxDiurnal.csv"),
             quote = FALSE,row.names = FALSE)
 
 gchemCleanCl2 <- timeVariation(bigDFCleanNox,
                                pollutant=c("Cl2_gc"),type = "hour",
                                plot = FALSE)$data$hour %>% 
+  mutate(Lower = Mean - Lower) %>% 
+  mutate(Upper = Upper - Mean) %>% 
   write.csv(file.path(EXPTDIR,"BLEACH","gchem-cl2-summer-cleanNoxDiurnal.csv"),
             quote = FALSE,row.names = FALSE)
 
 gchemCleanNox <- timeVariation(bigDFCleanNox,
-                               pollutant=c("NOx_gc"),type = "hour",
+                               pollutant=c("Nox_gc"),type = "hour",
                                plot = FALSE)$data$hour %>% 
+  mutate(Lower = Mean - Lower) %>% 
+  mutate(Upper = Upper - Mean) %>% 
   write.csv(file.path(EXPTDIR,"BLEACH","gchem-nox-summer-cleanNoxDiurnal.csv"),
             quote = FALSE,row.names = FALSE)
 
@@ -710,46 +933,60 @@ gchemCleanNox <- timeVariation(bigDFCleanNox,
 gchemDirtyHcl <- timeVariation(bigDFDirty,
                                pollutant=c("HCl_gc"),type = "hour",
                                plot = FALSE)$data$hour %>% 
+  mutate(Lower = Mean - Lower) %>% 
+  mutate(Upper = Upper - Mean) %>% 
   write.csv(file.path(EXPTDIR,"BLEACH","gchem-hcl-summer-DirtyDiurnal.csv"),
             quote = FALSE,row.names = FALSE)
 
 gchemDirtyClno2 <- timeVariation(bigDFDirty,
                                  pollutant=c("ClNO2_gc"),type = "hour",
                                  plot = FALSE)$data$hour %>% 
+  mutate(Lower = Mean - Lower) %>% 
+  mutate(Upper = Upper - Mean) %>% 
   write.csv(file.path(EXPTDIR,"BLEACH","gchem-clno2-summer-DirtyDiurnal.csv"),
             quote = FALSE,row.names = FALSE)
 
 gchemDirtyCl2 <- timeVariation(bigDFDirty,
                                pollutant=c("Cl2_gc"),type = "hour",
                                plot = FALSE)$data$hour %>% 
+  mutate(Lower = Mean - Lower) %>% 
+  mutate(Upper = Upper - Mean) %>% 
   write.csv(file.path(EXPTDIR,"BLEACH","gchem-cl2-summer-DirtyDiurnal.csv"),
             quote = FALSE,row.names = FALSE)
 
 gchemDirtyNox <- timeVariation(bigDFDirty,
-                               pollutant=c("NOx_gc"),type = "hour",
+                               pollutant=c("Nox_gc"),type = "hour",
                                plot = FALSE)$data$hour %>% 
+  mutate(Lower = Mean - Lower) %>% 
+  mutate(Upper = Upper - Mean) %>% 
   write.csv(file.path(EXPTDIR,"BLEACH","gchem-nox-summer-DirtyDiurnal.csv"),
             quote = FALSE,row.names = FALSE)
 
 
 
 dirtyHclOut <- timeVariation(bigDFDirty,
-                             pollutant = "hclAvg",xlab = "hour",
+                             pollutant = "hclCorr",xlab = "hour",
                              plot = FALSE)$data$hour %>% 
+  mutate(Lower = Mean - Lower) %>% 
+  mutate(Upper = Upper - Mean) %>% 
   write.csv(file.path(EXPTDIR,"BLEACH","hcl-summer-dirtyDiurnal.csv"),
             quote = FALSE,row.names = FALSE)
 
 
 uwCimsDirtyCl2 <- timeVariation(bigDFDirty,
-                                pollutant=c("brcl2"),type = "hour",
+                                pollutant=c("brcl2Avg"),type = "hour",
                                 plot = FALSE)$data$hour %>% 
+  mutate(Lower = Mean - Lower) %>% 
+  mutate(Upper = Upper - Mean) %>% 
   write.csv(file.path(EXPTDIR,"BLEACH","cl2-Summer-dirtyDiurnal.csv"),
             quote = FALSE,row.names = FALSE)
 
 
 uwCimsDirtyClno2 <- timeVariation(bigDFDirty,
-                                  pollutant=c("iclno2"),type = "hour",
+                                  pollutant=c("iclno2Avg"),type = "hour",
                                   plot = FALSE)$data$hour %>% 
+  mutate(Lower = Mean - Lower) %>% 
+  mutate(Upper = Upper - Mean) %>% 
   write.csv(file.path(EXPTDIR,"BLEACH","clno2-Summer-dirtyDiurnal.csv"),
             quote = FALSE,row.names = FALSE)
 
@@ -758,6 +995,8 @@ uwCimsDirtyClno2 <- timeVariation(bigDFDirty,
 dirtyNox <- timeVariation(bigDFClean,
                           pollutant = "nox",xlab = "hour", 
                           plot = FALSE)$data$hour %>% 
+  mutate(Lower = Mean - Lower) %>% 
+  mutate(Upper = Upper - Mean) %>% 
   write.csv(file.path(EXPTDIR,"BLEACH","nox-summer-dirtyDiurnal.csv"),
             quote = FALSE,row.names = FALSE)
 
@@ -765,12 +1004,16 @@ dirtyNox <- timeVariation(bigDFClean,
 dirtyNo <- timeVariation(bigDFClean,
                          pollutant = "no",xlab = "hour", 
                          plot = FALSE)$data$hour %>% 
+  mutate(Lower = Mean - Lower) %>% 
+  mutate(Upper = Upper - Mean) %>% 
   write.csv(file.path(EXPTDIR,"BLEACH","no-summer-dirtyDiurnal.csv"),
             quote = FALSE,row.names = FALSE)
 
 dirtyNo2 <- timeVariation(bigDFClean,
                           pollutant = "no2",xlab = "hour", 
                           plot = FALSE)$data$hour %>% 
+  mutate(Lower = Mean - Lower) %>% 
+  mutate(Upper = Upper - Mean) %>% 
   write.csv(file.path(EXPTDIR,"BLEACH","no2-summer-dirtyDiurnal.csv"),
             quote = FALSE,row.names = FALSE)
 
@@ -782,153 +1025,180 @@ dirtyNo2 <- timeVariation(bigDFClean,
 gchemDirtyHcl <- timeVariation(bigDFDirtyNox,
                                pollutant=c("HCl_gc"),type = "hour",
                                plot = FALSE)$data$hour %>% 
+  mutate(Lower = Mean - Lower) %>% 
+  mutate(Upper = Upper - Mean) %>% 
   write.csv(file.path(EXPTDIR,"BLEACH","gchem-hcl-summer-DirtyNoxDiurnal.csv"),
             quote = FALSE,row.names = FALSE)
 
 gchemDirtyClno2 <- timeVariation(bigDFDirtyNox,
                                  pollutant=c("ClNO2_gc"),type = "hour",
                                  plot = FALSE)$data$hour %>% 
+  mutate(Lower = Mean - Lower) %>% 
+  mutate(Upper = Upper - Mean) %>% 
   write.csv(file.path(EXPTDIR,"BLEACH","gchem-clno2-summer-DirtyNoxDiurnal.csv"),
             quote = FALSE,row.names = FALSE)
 
 gchemDirtyCl2 <- timeVariation(bigDFDirtyNox,
                                pollutant=c("Cl2_gc"),type = "hour",
                                plot = FALSE)$data$hour %>% 
+  mutate(Lower = Mean - Lower) %>% 
+  mutate(Upper = Upper - Mean) %>% 
   write.csv(file.path(EXPTDIR,"BLEACH","gchem-cl2-summer-DirtyNoxDiurnal.csv"),
             quote = FALSE,row.names = FALSE)
 
 gchemDirtyNox <- timeVariation(bigDFDirtyNox,
-                               pollutant=c("NOx_gc"),type = "hour",
+                               pollutant=c("Nox_gc"),type = "hour",
                                plot = FALSE)$data$hour %>% 
+  mutate(Lower = Mean - Lower) %>% 
+  mutate(Upper = Upper - Mean) %>% 
   write.csv(file.path(EXPTDIR,"BLEACH","gchem-nox-summer-DirtyNoxDiurnal.csv"),
             quote = FALSE,row.names = FALSE)
 
 
 
 dirtyHclOut <- timeVariation(bigDFDirtyNox,
-                             pollutant = "hclAvg",xlab = "hour",
+                             pollutant = "hclCorr",xlab = "hour",
                              plot = FALSE)$data$hour %>% 
+  mutate(Lower = Mean - Lower) %>% 
+  mutate(Upper = Upper - Mean) %>% 
   write.csv(file.path(EXPTDIR,"BLEACH","summer-dirtyNoxDiurnal.csv"),
             quote = FALSE,row.names = FALSE)
 
 
 uwCimsDirtyCl2 <- timeVariation(bigDFDirtyNox,
-                                pollutant=c("cl2"),type = "hour",
+                                pollutant=c("brcl2Avg"),type = "hour",
                                 plot = FALSE)$data$hour %>% 
+  mutate(Lower = Mean - Lower) %>% 
+  mutate(Upper = Upper - Mean) %>% 
   write.csv(file.path(EXPTDIR,"BLEACH","cl2-summer-dirtyNoxDiurnal.csv"),
             quote = FALSE,row.names = FALSE)
 
 
 uwCimsDirtyClno2 <- timeVariation(bigDFDirtyNox,
-                                  pollutant=c("clno2"),type = "hour",
+                                  pollutant=c("iclno2Avg"),type = "hour",
                                   plot = FALSE)$data$hour %>% 
+  mutate(Lower = Mean - Lower) %>% 
+  mutate(Upper = Upper - Mean) %>% 
   write.csv(file.path(EXPTDIR,"BLEACH","clno2-summer-dirtyNoxDiurnal.csv"),
             quote = FALSE,row.names = FALSE)
 
-gchemCleanHcl <- timeVariation(gchemClean,
-                               pollutant=c("HCl / ppb"))$data$hour %>% 
-  write.csv(file.path(EXPTDIR,"BLEACH","gchem-hcl-summer-cleanDiurnal.csv"),
+
+
+dirtyNox <- timeVariation(bigDFDirtyNox,
+                          pollutant = "nox",xlab = "hour", 
+                          plot = FALSE)$data$hour %>% 
+  mutate(Lower = Mean - Lower) %>% 
+  mutate(Upper = Upper - Mean) %>% 
+  write.csv(file.path(EXPTDIR,"BLEACH","nox-summer-dirtyNoxDiurnal.csv"),
             quote = FALSE,row.names = FALSE)
 
 
-gchemCleanClno2 <- timeVariation(gchemClean,
-                                 pollutant=c("ClNO2 / ppb"),type = "hour")$data$hour %>% 
-  write.csv(file.path(EXPTDIR,"BLEACH","gchem-clno2-summer-cleanDiurnal.csv"),
+dirtyNo <- timeVariation(bigDFDirtyNox,
+                         pollutant = "no",xlab = "hour", 
+                         plot = FALSE)$data$hour %>% 
+  mutate(Lower = Mean - Lower) %>% 
+  mutate(Upper = Upper - Mean) %>% 
+  write.csv(file.path(EXPTDIR,"BLEACH","no-summer-dirtyNoxDiurnal.csv"),
             quote = FALSE,row.names = FALSE)
 
-gchemCleanCl2 <- timeVariation(gchemClean,
-                               pollutant=c("Cl2 / ppb"),type = "hour")$data$hour %>% 
-  write.csv(file.path(EXPTDIR,"BLEACH","gchem-cl2-summer-cleanDiurnal.csv"),
-            quote = FALSE,row.names = FALSE)
-
-gchemCleanNox <- timeVariation(gchemClean,
-                               pollutant=c("NOx / ppb"),type = "hour")$data$hour %>% 
-  write.csv(file.path(EXPTDIR,"BLEACH","gchem-nox-summer-cleanDiurnal.csv"),
-            quote = FALSE,row.names = FALSE)
-
-
-gchemDirty <- gc %>% 
-  left_join(met) %>% 
-  filter(!between(ResultantMean_WD, 190, 300)) %>% 
-  filter(ResultantMean_WS >= 0.2) %>% 
-  rename(date = "ts") 
-
-
-gchemDirtyHcl <- timeVariation(gchemDirty,
-                               pollutant=c("HCl / ppb"),type = "hour")$data$hour %>% 
-  
-  write.csv(file.path(EXPTDIR,"BLEACH","gchem-hcl-summer-DirtyDiurnal.csv"),
-            quote = FALSE,row.names = FALSE)
-
-gchemDirtyClno2 <- timeVariation(gchemDirty,
-                                 pollutant=c("ClNO2 / ppb"),type = "hour")$data$hour %>% 
-  write.csv(file.path(EXPTDIR,"BLEACH","gchem-clno2-summer-DirtyDiurnal.csv"),
-            quote = FALSE,row.names = FALSE)
-
-gchemDirtyCl2 <- timeVariation(gchemDirty,
-                               pollutant=c("Cl2 / ppb"),type = "hour")$data$hour %>% 
-  write.csv(file.path(EXPTDIR,"BLEACH","gchem-cl2-summer-DirtyDiurnal.csv"),
-            quote = FALSE,row.names = FALSE)
-
-gchemDirtyNox <- timeVariation(gchemDirty,
-                               pollutant=c("NOx / ppb"),type = "hour")$data$hour %>% 
-  write.csv(file.path(EXPTDIR,"BLEACH","gchem-nox-summer-DirtyDiurnal.csv"),
+dirtyNo2 <- timeVariation(bigDFDirtyNox,
+                          pollutant = "no2",xlab = "hour", 
+                          plot = FALSE)$data$hour %>% 
+  mutate(Lower = Mean - Lower) %>% 
+  mutate(Upper = Upper - Mean) %>% 
+  write.csv(file.path(EXPTDIR,"BLEACH","no2-summer-dirtyNoxDiurnal.csv"),
             quote = FALSE,row.names = FALSE)
 
 
 
-iclDirty <- iclAvg %>% 
-  left_join(met) %>% 
-  filter(!between(ResultantMean_WD, 190, 300)) %>% 
-  filter(ResultantMean_WS >= 0.2) %>% 
-  rename(date = "ts") 
+
+
+# gchemDirty <- gc %>% 
+#   left_join(met) %>% 
+#   filter(!between(ResultantMean_WD, 190, 300)) %>% 
+#   filter(ResultantMean_WS >= 0.2) %>% 
+#   rename(date = "ts") 
+# 
+# 
+# gchemDirtyHcl <- timeVariation(gchemDirty,
+#                                pollutant=c("HCl / ppb"),type = "hour")$data$hour %>% 
+#   
+#   write.csv(file.path(EXPTDIR,"BLEACH","gchem-hcl-summer-DirtyDiurnal.csv"),
+#             quote = FALSE,row.names = FALSE)
+# 
+# gchemDirtyClno2 <- timeVariation(gchemDirty,
+#                                  pollutant=c("ClNO2 / ppb"),type = "hour")$data$hour %>% 
+#   write.csv(file.path(EXPTDIR,"BLEACH","gchem-clno2-summer-DirtyDiurnal.csv"),
+#             quote = FALSE,row.names = FALSE)
+# 
+# gchemDirtyCl2 <- timeVariation(gchemDirty,
+#                                pollutant=c("Cl2 / ppb"),type = "hour")$data$hour %>% 
+#   write.csv(file.path(EXPTDIR,"BLEACH","gchem-cl2-summer-DirtyDiurnal.csv"),
+#             quote = FALSE,row.names = FALSE)
+# 
+# gchemDirtyNox <- timeVariation(gchemDirty,
+#                                pollutant=c("NOx / ppb"),type = "hour")$data$hour %>% 
+#   write.csv(file.path(EXPTDIR,"BLEACH","gchem-nox-summer-DirtyDiurnal.csv"),
+#             quote = FALSE,row.names = FALSE)
+# 
+# 
+
+
+
+
+# 
+# iclDirty <- iclAvg %>% 
+#   left_join(met) %>% 
+#   filter(!between(ResultantMean_WD, 190, 300)) %>% 
+#   filter(ResultantMean_WS >= 0.2) %>% 
+#   rename(date = "ts") 
+# # Converting to UTC in post
+# 
+# iclDirtyOut <- timeVariation(iclDirty,
+#                                pollutant=c("iclno2Avg"),type = "hour")$data$hour %>% 
+#   write.csv(file.path(EXPTDIR,"BLEACH","icl-summer-dirtyDiurnal.csv"),
+#             quote = FALSE,row.names = FALSE)
+# 
+# 
+# iclClean <- iclAvg %>% 
+#   left_join(met) %>% 
+#   filter(between(ResultantMean_WD, 190, 300)) %>% 
+#   filter(ResultantMean_WS >= 0.2) %>% 
+#   rename(date = "ts") 
+# # Converting to UTC in post
+# 
+# iclCleanOut <- timeVariation(iclClean,
+#                              pollutant=c("iclno2Avg"),type = "hour")$data$hour %>% 
+#   write.csv(file.path(EXPTDIR,"BLEACH","icl-summer-cleanDiurnal.csv"),
+#             quote = FALSE,row.names = FALSE)
+
+
 # Converting to UTC in post
-
-iclDirtyOut <- timeVariation(iclDirty,
-                               pollutant=c("iclno2Avg"),type = "hour")$data$hour %>% 
-  write.csv(file.path(EXPTDIR,"BLEACH","icl-summer-dirtyDiurnal.csv"),
-            quote = FALSE,row.names = FALSE)
-
-
-iclClean <- iclAvg %>% 
-  left_join(met) %>% 
-  filter(between(ResultantMean_WD, 190, 300)) %>% 
-  filter(ResultantMean_WS >= 0.2) %>% 
-  rename(date = "ts") 
-# Converting to UTC in post
-
-iclCleanOut <- timeVariation(iclClean,
-                             pollutant=c("iclno2Avg"),type = "hour")$data$hour %>% 
-  write.csv(file.path(EXPTDIR,"BLEACH","icl-summer-cleanDiurnal.csv"),
-            quote = FALSE,row.names = FALSE)
-
-
-# Converting to UTC in post
-brclDirty <- brclAvg %>% 
-  left_join(met) %>% 
-  filter(!between(ResultantMean_WD, 190, 300)) %>% 
-  filter(ResultantMean_WS >= 0.2) %>% 
-  rename(date = "ts") 
-# Converting to UTC in post
-
-brclDirtyOut <- timeVariation(brclDirty,
-                             pollutant=c("brcl2Avg"),type = "hour")$data$hour %>% 
-  write.csv(file.path(EXPTDIR,"BLEACH","brcl-summer-dirtyDiurnal.csv"),
-            quote = FALSE,row.names = FALSE)
-
-# Converting to UTC in post
-
-brclClean <- brclAvg %>% 
-  left_join(met) %>% 
-  filter(between(ResultantMean_WD, 190, 300)) %>% 
-  filter(ResultantMean_WS >= 0.2) %>% 
-  rename(date = "ts") 
-# Converting to UTC in post
-
-brclCleanOut <- timeVariation(brclClean,
-                             pollutant=c("brcl2Avg"),type = "hour")$data$hour %>% 
-  write.csv(file.path(EXPTDIR,"BLEACH","brcl-summer-cleanDiurnal.csv"),
-            quote = FALSE,row.names = FALSE)
+# brclDirty <- brclAvg %>% 
+#   left_join(met) %>% 
+#   filter(!between(ResultantMean_WD, 190, 300)) %>% 
+#   filter(ResultantMean_WS >= 0.2) %>% 
+#   rename(date = "ts") 
+# # Converting to UTC in post
+# 
+# brclDirtyOut <- timeVariation(brclDirty,
+#                              pollutant=c("brcl2Avg"),type = "hour")$data$hour %>% 
+#   write.csv(file.path(EXPTDIR,"BLEACH","brcl-summer-dirtyDiurnal.csv"),
+#             quote = FALSE,row.names = FALSE)
+# 
+# # Converting to UTC in post
+# 
+# brclClean <- brclAvg %>% 
+#   left_join(met) %>% 
+#   filter(between(ResultantMean_WD, 190, 300)) %>% 
+#   filter(ResultantMean_WS >= 0.2) %>% 
+#   rename(date = "ts") 
+# # Converting to UTC in post
+# 
+# brclCleanOut <- timeVariation(brclClean,
+#                              pollutant=c("brcl2Avg"),type = "hour")$data$hour %>% 
+#   write.csv(file.path(EXPTDIR,"BLEACH","brcl-summer-cleanDiurnal.csv"),
+#             quote = FALSE,row.names = FALSE)
 
 
 
@@ -944,7 +1214,10 @@ write.csv(popsDf, file.path(EXPTDIR,"BLEACH","data", "pops", "pops.csv"))
 # specrad
 specrad <- read_csv(file.path(EXPTDIR,
                               "BLEACH","data","specrad","summer-specrad.csv")) %>% 
-  mutate(date = ts)
+  mutate(date = ts) %>% 
+  arrange(ts)
+write.csv(specrad, "G:/My Drive/Experiments/BLEACH/data/specrad/summer-specrad.csv",
+          row.names = FALSE,quote=FALSE)
 
 specradDiurnal <- timeVariation(specrad, 
                                 pollutant = "j(no2)",type = "hour")$data$hour %>% 
