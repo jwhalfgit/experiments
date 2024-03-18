@@ -49,9 +49,9 @@ winterDates <- winterDates[-which(winterDates == as.Date("2022-02-16"))]
 # Convert to 1Hz Data -----------------------------------------------------
 ###############################################################################
 
-load.tildas.data(START = "2022-02-05", STOP = "2022-02-20", tenHz=TRUE, 
-                 STC = TRUE, output.type = "data.frame")
-# rm(str.xts)
+# load.tildas.data(START = "2022-02-05", STOP = "2022-02-20", tenHz=TRUE, 
+#                  STC = TRUE, output.type = "data.frame")
+# # rm(str.xts)
 # 
 # df.str <- df.str %>% 
 #   tibble() %>%
@@ -94,23 +94,25 @@ beep()
 
 # Load STC data
 load.tildas.data(START = "2022-02-05", STOP = "2022-02-20",STC=TRUE,STR = FALSE, 
-                 output = "data.frame")
+                 output = "data.frame",STCALL = TRUE)
 #rm(stc.xts)
 
 df.stc <- df.stc %>% 
   tibble() %>% 
   mutate(ts = ymd_hms(ts)) %>% 
-  mutate(ts = floor_date(ts), unit = "second") %>% 
-  select(ts, Praw, Traw, Range_F.1_L.1, AD8, ValveW, T.Laser.1,
-         ChillerT)
+  mutate(ts = floor_date(ts), unit = "second") #%>% 
+  # select(ts, Praw, Traw, Range_F.1_L.1, AD8, ValveW, T.Laser.1,
+  #        ChillerT)
 
 dfAnal <- winterAvg %>% 
   left_join(df.stc)
 
 # Plot the full time series
-dfAnal %>% 
-  filter(between(ts, ymd_hms("2022-02-05 00:00:00"), 
-                 ymd_hms("2022-02-06 00:00:00")),ValveW ==0) %>% 
+TIME1 = ymd_hms("2022-02-05 00:00:00")
+TIME2 = ymd_hms("2022-02-10 00:00:00")
+
+P1 <- dfAnal %>% 
+  filter(between(ts, TIME1, TIME2),ValveW ==0) %>% 
   ggplot(aes(x=ts,y=hcl)) +
   geom_line()+
   scale_y_continuous(name = "HCl")
@@ -118,7 +120,10 @@ dfAnal %>%
 
 
 # QC for Jordan -----------------------------------------------------------
-df.str <- as.data.frame(winterAvg)
+df.str <- as.data.frame(winterAvg)*1.015 
+# the 1.015 correction factor is the summer (1.0515) multipled by dilution factor (3.7/12.7)
+# I am estimating this offset right now, as we don't have experimental data to confirm yet.  (2024-03-18)
+
 str.xts <- xts(df.str[2:ncol(df.str)], order.by = df.str$ts, tzone = "UTC")
 
 # the stc.xts as loaded from load.tildas.data does not match time stamps from 
@@ -129,7 +134,8 @@ stc.xts <- xts(df.stc[2:ncol(df.stc)], order.by = df.stc$ts, tzone = "UTC")
 
 offset.correct()
 remove.cal()
-outXts <- filter.noise(stdev = 3)
+
+str.xts.CalCorr <- str.xts.CalCorr *1.0515 #(sd of %error is 1.589%)
 
 
 dfAnalNoFilter <- data.frame("ts" = index(str.xts.CalCorr),
@@ -137,17 +143,36 @@ dfAnalNoFilter <- data.frame("ts" = index(str.xts.CalCorr),
   tibble() %>% 
   mutate(ts = ymd_hms(ts))
 
-dfAnalCorr <- data.frame("ts" = index(outXts),
-                         coredata(outXts)) %>% 
-  tibble() %>% 
-  mutate(ts = ymd_hms(ts))
+P1 <- dfAnalNoFilter %>% 
+  filter(between(ts, TIME1, TIME2)) %>% 
+  ggplot(aes(x=ts,y=hcl)) +
+  geom_line()+
+  scale_y_continuous(name = "HCl")
+#scale_y_continuous(limits = c(-0.2,1), name = "HCl")
+P2 <- dfAnal %>% 
+  filter(between(ts, TIME1, TIME2)) %>% 
+  ggplot(aes(x=ts,y=T.Laser.1)) +
+  geom_line()
+
+grid.arrange(P1,P2,nrow = 2,ncol=1)
+
+
+dfAnalCorrRange <- filter.noise.Range(STR = dfAnalNoFilter,stdev = 1)
+dfAnalCorr <- filter.noise(STR = dfAnalCorrRange, stdev = 3)
+
+#outXts <- filter.noise(stdev = 3)
+
+# dfAnalCorr <- data.frame("ts" = index(outXts),
+#                          coredata(outXts)) %>% 
+#   tibble() %>% 
+#   mutate(ts = ymd_hms(ts))
 
 # This was great for correcting the backgrounds and removing calibration points.
 # However, there are still errant spikes in the data of unknown origin.
 
 
 # For Plotting
-TIME1 <- "2022-02-05 00:00:00"
+TIME1 <- "2022-02-19 00:00:00"
 TIME2 <- "2022-02-20 00:00:00"
 
 P1 <- dfAnalCorr %>% 
@@ -158,7 +183,7 @@ P1 <- dfAnalCorr %>%
   scale_y_continuous(limits = c(-0.2,0.5),name = "HCl")
 
 
-P2 <- dfAnalNoFilter %>% 
+P2 <- dfAnalCorrRange %>% 
   filter(between(ts, ymd_hms(TIME1), ymd_hms(TIME2))) %>% 
   ggplot(aes(x=ts,y=hcl)) +
   geom_line()+
@@ -250,7 +275,7 @@ x <- blankAnalDF[blankAnalDF$hclBlankSd >= quantile(blankAnalDF$hclBlankSd,(0+5/
 #            between(hour(ts)*60 + minute(ts) + (second(ts)/60), 1382, 1383),
 #          ValveW == 0)
 
-
+# This looks at the two minutes after blanks.  
 post2minBlanks <- dfAnal %>% 
   filter(between(minute(ts)+ (second(ts)/60), 15,16) | 
            between(minute(ts)+ (second(ts)/60), 25,26) | 
@@ -274,7 +299,7 @@ post2minBlanks <- dfAnal %>%
            between(hour(ts)*60 + minute(ts) + (second(ts)/60), 1325, 1326)|
            between(hour(ts)*60 + minute(ts) + (second(ts)/60), 1385, 1386),
          ValveW == 0)
-  }else{
+#  }else{
     filter(between(minute(ts)+ (second(ts)/60), 12,13) | 
              between(minute(ts)+ (second(ts)/60), 22,23) | 
              between(minute(ts)+ (second(ts)/60), 32,33) | 
@@ -337,16 +362,20 @@ winterDates <- seq(as.Date("2022-02-05"), as.Date("2022-02-20"),by=1)
 winterDates <- winterDates[-which(winterDates == as.Date("2022-02-16"))]
 
 # Let's isolate permeation source data
-outList <- list()
-for(ix in 1:length(winterDates)){
-  load.tildas.data(START = winterDates[ix],STOP = winterDates[ix],STC = TRUE,
-                   tenHz = TRUE)
-  offset.correct(tenHz=TRUE)
-  
-  outList <- append(outList, remove.cal(tenHz = TRUE, RETURNCAL = TRUE))
-}
+# outList <- list()
+# for(ix in 1:length(winterDates)){
+#   # load.tildas.data(START = winterDates[ix],STOP = winterDates[ix],STC = TRUE,
+#   #                  tenHz = TRUE)
+#   # offset.correct(tenHz=TRUE)
+#   # 
+#   outList <- append(outList, remove.cal(STR = str.xts.BckCorr, 
+#                                         tenHz = TRUE, RETURNCAL = TRUE))
+# }
 
-calList <- unlist(outList, recursive = FALSE)
+
+calList <- remove.cal(RETURNCAL = TRUE)
+
+# calList <- unlist(outList, recursive = FALSE)
 
 # calList contains the calibration data in a List.  
 # Be aware - our chiller that warmed the inlet box failed sometime before 11 Feb.
@@ -371,17 +400,23 @@ calListSd <- period.apply(calListFilter$hcl,
 calListUncPerc <- calListSd / calListAverage * 100
 
 
-
+calOut <- data.frame(ts = index(calListAverage),hcl = calListAverage,
+                     stdev = calListSd, stdevPct = calListUncPerc,
+                         row.names=NULL)
+names(calOut) <- c("ts","hcl","hclSd","hclSdPct")
 # 
-# 2022-02-05 21:09:00.15 1.7544468
-# 2022-02-06 21:09:00.34 2.0443881
-# 2022-02-07 21:09:00.29 1.1059907
-# 2022-02-08 21:09:00.28 0.5999781
-# 2022-02-09 15:09:00.47 0.7120356
-# 2022-02-17 21:09:00.51 0.6244143
-# 2022-02-18 21:09:00.55 1.6897452
-# 2022-02-19 21:09:00.50 1.0673982
-# 2022-02-20 21:09:00.49 1.5008829
+# calOut
+# ts      hcl       hclSd  hclSdPct
+# 1  2022-02-05 21:08:29 2.105939 0.037922068 1.8007201
+# 2  2022-02-06 21:08:29 2.044119 0.040829791 1.9974277
+# 3  2022-02-07 21:09:00 1.992718 0.019144011 0.9606984
+# 4  2022-02-08 21:09:00 2.021016 0.012097709 0.5985953
+# 5  2022-02-09 15:08:29 1.992737 0.012174417 0.6109396
+# 6  2022-02-16 15:08:29 1.819033          NA        NA
+# 7  2022-02-17 21:09:00 1.889630 0.009011386 0.4768864
+# 8  2022-02-18 21:09:00 1.889587 0.035499839 1.8787094
+# 9  2022-02-19 21:09:00 1.839837 0.017755969 0.9650837
+# 10 2022-02-20 21:08:29 1.874669 0.028425193 1.5162777
 
 calListFlatTs <- as.numeric(calListFlatFilter$ts) - as.numeric(calListFlatFilter$ts[1])
 # lmCal <- lm(calListFlatFilter$hcl~calListFlatTs)
@@ -468,7 +503,7 @@ dfAnal <- df.str %>%
   filter(ts < ymd_hm("2021-07-07 00:00") | ts > ymd_hm("2021-07-07 00:10"))%>% # cylinder
   filter(ts < ymd_hm("2021-07-07 03:00") | ts > ymd_hm("2021-07-07 03:10"))%>% # cylinder
   filter(ts < ymd_hm("2021-07-07 06:00") | ts > ymd_hm("2021-07-07 06:10"))%>% # cylinder
-  filter(ts < ymd_hm("2021-07-07 09:05") | ts > ymd_hm("2021-07-07 10:00"))%>% # hno3
+  filter(ts < ymd_hm("2021-07-07 09:05") | ts > ymd_hm("2021-07-07 12:00"))%>% # hno3 (for sure from 9:05, assuming til noon based on MeOH signal)
   filter(ts < ymd_hm("2021-07-07 12:00") | ts > ymd_hm("2021-07-07 12:10"))%>% # cylinder
   filter(ts < ymd_hm("2021-07-07 15:00") | ts > ymd_hm("2021-07-07 15:10"))%>% # cylinder
   filter(ts < ymd_hm("2021-07-07 18:00") | ts > ymd_hm("2021-07-07 18:10"))%>% # cylinder
@@ -492,7 +527,7 @@ dfAnal <- df.str %>%
   filter(ts < ymd_hm("2021-07-14 13:25") | ts > ymd_hm("2021-07-14 15:30"))%>% # denuder and cylinder
   filter(ts < ymd_hm("2021-07-14 15:58") | ts > ymd_hm("2021-07-14 16:15"))%>% # cylinder
   filter(ts < ymd_hm("2021-07-15 08:15") | ts > ymd_hm("2021-07-15 15:00"))%>% # cylinder
-  filter(ts < ymd_hm("2021-07-16 11:15") | ts > ymd_hm("2021-07-16 12:00"))%>% # cylinder
+  filter(ts < ymd_hm("2021-07-16 10:50") | ts > ymd_hm("2021-07-16 12:00"))%>% # cylinder
   filter(ts < ymd_hm("2021-07-16 15:00") | ts > ymd_hm("2021-07-16 17:30"))%>% #  passivant
   # 16 July noonish to 3ish, passivant replacement
   #filter(ts < ymd_hms("2021-07-17 07:17:20") | ts > ymd_hm("2021-07-17 07:18"))%>% #  bad
@@ -581,8 +616,8 @@ dfOut <- rbind(earlyData, lateData)
 
 
 # For Plotting
-TIME1 <- "2021-06-21 00:00:00"
-TIME2 <- "2021-06-22 00:00:00"
+TIME1 <- "2021-06-25 00:00:00"
+TIME2 <- "2021-06-27 00:00:00"
 
 P1 <- dfAnal %>% 
   filter(between(ts, ymd_hms(TIME1), ymd_hms(TIME2))) %>% 
@@ -596,8 +631,14 @@ P1 <- dfAnal %>%
 P2 <- dfAnal %>% 
   filter(between(ts, ymd_hms(TIME1), ymd_hms(TIME2))) %>% 
   ggplot(aes(x=ts,y=ValveW)) +
-  geom_line()+
+  geom_line(colour = "blue")+
   scale_y_continuous(name = "Valve", limits = c(0,5))
+
+P2 <- dfAnal %>% 
+  filter(between(ts, ymd_hms(TIME1), ymd_hms(TIME2))) %>% 
+  ggplot(aes(x=ts,y=Range_F.1_L.1)) +
+  geom_line(colour = "blue")+
+  scale_y_continuous(name = "Temp")
 
 
 grid.arrange(P1,P2,nrow = 2,ncol=1)
@@ -606,6 +647,7 @@ grid.arrange(P1,P2,nrow = 2,ncol=1)
 
 # QC for Jordan -----------------------------------------------------------
 df.str <- as.data.frame(dfOut[1:2])
+df.str$hcl <- df.str$hcl*1.0515 # applying loss factor to data.
 str.xts <- xts(df.str[2:ncol(df.str)], order.by = df.str$ts, tzone = "UTC")
 
 # the stc.xts as loaded from load.tildas.data does not match time stamps from 
@@ -660,22 +702,29 @@ write.csv(dfAnalNoFilter,
           quote = FALSE, row.names = FALSE)
 
 
-outXts <- filter.noise(stdev = 3)
-outXtsAlt <- filter.noise.alt(stdev = 2)
-dfAnalCorr <- data.frame("ts" = index(outXts),
-                         coredata(outXts)) %>% 
-  tibble() %>% 
-  mutate(ts = ymd_hms(ts))
+# dfAnalCorr <- filter.noise(STR = dfAnalNoFilter, stdev = 3)
+# Filter noise based on the laser power noise
+dfAnalCorrRange <- filter.noise.Range(STR = dfAnalNoFilter,stdev = 1)
+# Filter noise based on the measurement noise.
+dfAnalCorr <- filter.noise(STR = dfAnalCorrRange, stdev = 2)
+dfAnalCorrChi <- filter.noise.chi(STR = dfAnalCorrRange, stdev = 1)
 
-dfAnalCorrAlt <- data.frame("ts" = index(outXtsAlt),
-                            coredata(outXtsAlt)) %>% 
-  tibble() %>% 
-  mutate(ts = ymd_hms(ts))
+# dfAnalCorr <- filter.noise(STR = dfAnalCorrRange, stdev = 3)
+#outXtsAlt <- filter.noise.alt(stdev = 2)
+# dfAnalCorr <- data.frame("ts" = index(outXts),
+#                          coredata(outXts)) %>% 
+#   tibble() %>% 
+#   mutate(ts = ymd_hms(ts))
+# 
+# dfAnalCorrAlt <- data.frame("ts" = index(outXtsAlt),
+#                             coredata(outXtsAlt)) %>% 
+#   tibble() %>% 
+#   mutate(ts = ymd_hms(ts))
 
 
 # For Plotting
-TIME1 <- "2021-07-17 00:00:00"
-TIME2 <- "2021-07-22 00:00:00"
+TIME1 <- "2021-06-10 00:00:00"
+TIME2 <- "2021-06-17 00:00:00"
 
 P1 <- dfAnalCorr %>% 
   filter(between(ts, ymd_hms(TIME1), ymd_hms(TIME2))) %>% 
@@ -684,7 +733,7 @@ P1 <- dfAnalCorr %>%
   geom_line()+
   scale_y_continuous(limits = c(-0.2,0.5),name = "HCl")
 
-P2 <- dfAnalCorrAlt %>% 
+P2 <- dfAnalCorrChi %>% 
   filter(between(ts, ymd_hms(TIME1), ymd_hms(TIME2))) %>% 
   
   ggplot(aes(x=ts,y=hcl)) +
@@ -700,14 +749,24 @@ P2 <- dfAnalCorrAlt %>%
 grid.arrange(P1,P2,nrow = 2,ncol=1)
 
 
-write.csv(dfAnalCorr, "G:/My Drive/Experiments/OSCA/Summer-osca-3sdfilter.csv",
+write.csv(dfAnalCorrChi, "G:/My Drive/Experiments/OSCA/Summer-osca-rangefilter-1sdchifilter-TOPUBLISH.csv",
           quote=FALSE,row.names=FALSE)
 
-analXts <- xts(as.data.frame(dfAnalCorr)[2:ncol(dfAnalCorr)],order.by = dfAnalCorr$ts)
-analXts <- merge(analXts,stc.xts$ValveW,all = TRUE)
-write.zoo(analXts, "G:/My Drive/Experiments/OSCA/Summer-osca-3sdfilter.csv",
-          quote=FALSE,row.names=FALSE,sep=",",index.name = "ts")
+# analXts <- xts(as.data.frame(dfAnalCorr)[2:ncol(dfAnalCorr)],order.by = dfAnalCorr$ts)
+# analXts <- merge(analXts,stc.xts$ValveW,all = TRUE)
+# write.zoo(analXts, "G:/My Drive/Experiments/OSCA/Summer-osca-3sdfilter.csv",
+#           quote=FALSE,row.names=FALSE,sep=",",index.name = "ts")
+# 
 
+outDF <- dfAnalCorr %>% 
+  left_join(df.stc) %>% 
+  mutate(ts = floor_date(ts, "60 minute")) %>% 
+  group_by(ts) %>% 
+  summarize_all(mean) %>% 
+  ungroup()
+
+write.csv(outDF, "G:/My Drive/Experiments/OSCA/Summer-osca-rangefilter-1sdchifilter-60min.csv",
+          quote=FALSE, row.names= FALSE)
 
 
 analXts30s <- period.apply(analXts,INDEX = endpoints(x = analXts,on = "s",k=30),mean, na.rm=TRUE)
