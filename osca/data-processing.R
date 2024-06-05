@@ -120,9 +120,8 @@ P1 <- dfAnal %>%
 
 
 # QC for Jordan -----------------------------------------------------------
-df.str <- as.data.frame(winterAvg)*1.015 
-# the 1.015 correction factor is the summer (1.0515) multipled by dilution factor (3.7/12.7)
-# I am estimating this offset right now, as we don't have experimental data to confirm yet.  (2024-03-18)
+df.str <- as.data.frame(winterAvg)
+
 
 str.xts <- xts(df.str[2:ncol(df.str)], order.by = df.str$ts, tzone = "UTC")
 
@@ -135,13 +134,21 @@ stc.xts <- xts(df.stc[2:ncol(df.stc)], order.by = df.stc$ts, tzone = "UTC")
 offset.correct()
 remove.cal()
 
-str.xts.CalCorr <- str.xts.CalCorr *1.0515 #(sd of %error is 1.589%)
+str.xts.CalCorr$hcl <- str.xts.CalCorr$hcl *1.015 #(sd of %error is 1.589%)
+# the 1.015 correction factor is the summer (1.0515) multipled by dilution factor (3.7/12.7)
+# I am estimating this offset right now, as we don't have experimental data to confirm yet.  (2024-03-18)
 
 
 dfAnalNoFilter <- data.frame("ts" = index(str.xts.CalCorr),
                          coredata(str.xts.CalCorr)) %>% 
   tibble() %>% 
   mutate(ts = ymd_hms(ts))
+
+
+dfAnalNoFilter60s <- dfAnalNoFilter %>% 
+  mutate(ts = floor_date(ts, "60 seconds")) %>% 
+  group_by(ts) %>% 
+  summarise_all(mean)
 
 P1 <- dfAnalNoFilter %>% 
   filter(between(ts, TIME1, TIME2)) %>% 
@@ -157,8 +164,11 @@ P2 <- dfAnal %>%
 grid.arrange(P1,P2,nrow = 2,ncol=1)
 
 
-dfAnalCorrRange <- filter.noise.Range(STR = dfAnalNoFilter,stdev = 1)
-dfAnalCorr <- filter.noise(STR = dfAnalCorrRange, stdev = 3)
+dfAnalCorrRange <- filter.noise.Range(STR = dfAnalNoFilter60s,stdev = 1)
+dfAnalCorrChi <- filter.noise.chi(STR = dfAnalCorrRange, stdev = 1)
+
+
+#dfAnalCorr <- filter.noise(STR = dfAnalCorrRange, stdev = 3)
 
 #outXts <- filter.noise(stdev = 3)
 
@@ -199,8 +209,8 @@ P2 <- dfAnalCorrRange %>%
 # grid.arrange(hclLastWeekPlot,valveLastWeekPlot,nrow = 2,ncol=1)
 grid.arrange(P1,P2,nrow = 2,ncol=1)
 
-# write.csv(dfAnalCorr, "G:/My Drive/Experiments/OSCA/winter-osca-3sdfilter.csv",
-#           quote=FALSE,row.names=FALSE)
+write.csv(dfAnalCorrChi, "G:/My Drive/Experiments/OSCA/winter-osca-60s-rangefilter-1sdchifilter-TOPUBLISH.csv",
+         quote=FALSE,row.names=FALSE)
 
 
 # Winter Analysis ---------------------------------------------------------
@@ -706,7 +716,7 @@ write.csv(dfAnalNoFilter,
 # Filter noise based on the laser power noise
 dfAnalCorrRange <- filter.noise.Range(STR = dfAnalNoFilter,stdev = 1)
 # Filter noise based on the measurement noise.
-dfAnalCorr <- filter.noise(STR = dfAnalCorrRange, stdev = 2)
+#dfAnalCorr <- filter.noise(STR = dfAnalCorrRange, stdev = 2)
 dfAnalCorrChi <- filter.noise.chi(STR = dfAnalCorrRange, stdev = 1)
 
 # dfAnalCorr <- filter.noise(STR = dfAnalCorrRange, stdev = 3)
