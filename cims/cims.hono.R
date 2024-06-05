@@ -10,7 +10,25 @@ dfT200 <- do.call(rbind,fileListNO) %>%
   mutate(date = mdy_hms(date)) %>% 
   select(date, T200_NO, T200_NO2, T200_NOx)
 
+write.csv(dfT200,"C:/Users/jh2949/OneDrive - University of York/Desktop/CIMS_analysis/HONO/T200/no-stitch.csv",
+           quote = FALSE, row.names = FALSE)
 
+
+t200List <- list()
+
+
+for(ix in 1:nrow(calTimes)){
+  t200List[[ix]] <- dfT200 %>% 
+    filter(between(date,ymd_hms(calTimes[[ix,1]]),ymd_hms(calTimes[[ix,2]]))) %>% 
+    mutate(grp = calTimes$event[ix])
+}
+
+t200Df <- do.call(rbind, t200List) %>% 
+  group_by(grp) %>% 
+  summarise_all(mean,na.rm=TRUE) %>% 
+  ungroup() %>% 
+  mutate(flag = calTimes$type) %>% 
+  mutate(NOcorr = T200_NO - T200_NO[flag == "bg"])
 
 # LOPAP -------------------------------------------------------------------
 
@@ -20,13 +38,13 @@ dfT200 <- do.call(rbind,fileListNO) %>%
 # CIMS --------------------------------------------------------------------
 
 
-ffCims <- list.files("G:/Shared drives/CIMS data/Calibrations/ClNO2/wes/", 
-                 full.names=TRUE, pattern = ".csv")
+ffCims <- list.files("C:/Users/jh2949/OneDrive - University of York/Desktop/CIMS_analysis/HONO/CIMS",
+                   full.names=TRUE, pattern = ".csv")
 
 fileListCims <- lapply(ffCims,read_csv)
 dfCims <- do.call(rbind,fileListCims) %>% 
   replace(. < 0, 0) %>% 
-  mutate(clno2norm = ifelse(I!=0,IClNO2/(I + IH2O),NA)) %>% 
+  mutate(hononorm = ifelse(I!=0,IHONO/(I + IH2O),NA)) %>% 
   mutate(iratio = ifelse(I!=0,IH2O / I, NA))
 
 # TIME1 <- ymd_hms("2024-04-08 00:00:00")
@@ -35,16 +53,48 @@ dfCims <- do.call(rbind,fileListCims) %>%
 dfCims %>% 
   #filter(between(time, ymd_hms(TIME1), ymd_hms(TIME2))) %>% 
   
-  ggplot(aes(x=time,y=IClNO2)) +
+  ggplot(aes(x=time,y=IHONO)) +
   geom_line()+
-  scale_y_continuous(name = "IClNO2")+
+  scale_y_continuous(name = "IHONO")+
   theme_bw()
 
 # 
-# write.csv(dfCims,"G:/My Drive/Experiments/CIMS/calibrations/cimscsv.csv",
-#           quote=FALSE,row.names=FALSE)
+write.csv(dfCims,"C:/Users/jh2949/OneDrive - University of York/Desktop/CIMS_analysis/HONO/CIMS/cims-stitch.csv",
+          quote = FALSE, row.names = FALSE)
 # 
 
+
+
+# CIMS-HR -----------------------------------------------------------------
+calTimes <- read_csv("C:/Users/jh2949/OneDrive - University of York/Desktop/CIMS_analysis/HONO/times.csv")
+
+# The calTimes are written for local time, while the CIMS HR data is written in
+# UTC.  
+
+cimsTimes <- calTimes %>% 
+  mutate(st = st - 3600, et = et - 3600)
+
+cimsHR <- read_csv("C:/Users/jh2949/OneDrive - University of York/Desktop/CIMS_analysis/HONO/CIMS/drycal-hr.csv") %>% 
+  replace(. < 0, 0) %>% 
+  mutate(hononorm = ifelse(I!=0,IHONO/(I + IH2O),NA)) %>% 
+  mutate(iratio = ifelse(I!=0,IH2O / I, NA))
+
+cimsList <- list()
+
+for(ix in 1:nrow(cimsTimes)){
+  cimsList[[ix]] <- cimsHR %>% 
+    filter(between(ts,ymd_hms(cimsTimes[[ix,1]]),ymd_hms(cimsTimes[[ix,2]]))) %>% 
+    mutate(grp = cimsTimes$event[ix])
+}
+
+cimsHrDf <- do.call(rbind, cimsList) %>% 
+  group_by(grp) %>% 
+  summarise_all(mean,na.rm=TRUE) %>% 
+  mutate(flag = cimsTimes$type) %>% 
+  mutate(hononormCorr = hononorm - hononorm[flag == "bg"])
+
+  
+plot(t200Df$NOcorr,cimsHrDf$hononormCorr, pch = 19)
 
 # NO2 ---------------------------------------------------------------------
 
