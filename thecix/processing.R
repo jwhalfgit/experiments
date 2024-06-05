@@ -1,10 +1,14 @@
-load.tildas.data(START = "2023-07-31", STOP = "2023-08-16",
+load.tildas.data(START = "2023-07-31", STOP = "2023-08-21",
                  STC = TRUE, HCLONLY= FALSE)
 
 dfAnal <- df.str %>% 
   left_join(df.stc)  %>% 
   filter(!between(ts,ymd_hm("2023-08-01 16:15"), ymd_hm("2023-08-01 19:39"))) %>% 
-  filter(!between(ts,ymd_hm("2023-08-16 12:09"), ymd_hm("2023-08-16 12:15")))
+  filter(!between(ts,ymd_hm("2023-08-16 12:09"), ymd_hm("2023-08-16 12:15"))) %>% 
+  filter(!between(ts,ymd_hm("2023-08-17 18:20"), ymd_hm("2023-08-17 22:00"))) %>% # PFBS experiments
+  filter(!between(ts,ymd_hm("2023-08-19 14:10"), ymd_hm("2023-08-19 14:30"))) # opened inertial inlet for USB fiddling
+  
+  
 
 
 # Let's first try to produce a blank subtracted dataset.
@@ -23,7 +27,7 @@ dfAnal <- dfAnal %>%
   mutate(ValveW = replace(ValveW,
                         between(ts,
                                 ymd_hm("2023-08-01 14:30"),
-                                ymd_hm("2023-08-02 16:30"))&ValveW == 8,0)) %>% 
+                                ymd_hm("2023-08-02 16:20"))&ValveW == 8,0)) %>% 
   mutate(ValveW = replace(ValveW,
                           between(ts,
                                   ymd_hm("2023-08-16 04:05"),
@@ -70,11 +74,15 @@ dfAnal$flag[valveChangeixTail] <- 1
 
 str.xts <- xts(x = dfAnal[2:6], order.by = dfAnal$ts)
 stc.xts <- xts(x = dfAnal[c("ValveW","flag")], order.by = dfAnal$ts)
-
+head(x)
 
 
 offset.correct()
+x<-offset.correct(just.zero = TRUE)
+y <- split.groups(x)
+z <- y[lengths(y) < 150]
 
+sigmaVector <- sapply(z, sd, na.rm = TRUE)
 
 
 str.tbl <- str.xts.BckCorr %>% fortify.zoo %>% as_tibble(.name_repair = "minimal")
@@ -135,26 +143,20 @@ dfAnalCorr <- dfAnalCorr%>%
 
 # 
 dfAnalCorr <- dfAnalCorr %>%
-  filter(!between(hour(ts)*60 + minute(ts) + (second(ts)/60), 5, 6)) %>%
-  filter(!between(hour(ts)*60 + minute(ts) + (second(ts)/60), 185, 186)) %>%
-  filter(!between(hour(ts)*60 + minute(ts) + (second(ts)/60), 365, 366)) %>%
-  filter(!between(hour(ts)*60 + minute(ts) + (second(ts)/60), 545, 546)) %>%
-  filter(!between(hour(ts)*60 + minute(ts) + (second(ts)/60), 725, 726)) %>%
-  filter(!between(hour(ts)*60 + minute(ts) + (second(ts)/60), 905, 906)) %>%
-  filter(!between(hour(ts)*60 + minute(ts) + (second(ts)/60), 1085, 1086)) %>%
-  filter(!between(hour(ts)*60 + minute(ts) + (second(ts)/60), 1265, 1266))
+  filter(!between(hour(ts)*60 + minute(ts) + (second(ts)/60), 5, 7)) %>%
+  filter(!between(hour(ts)*60 + minute(ts) + (second(ts)/60), 185, 187)) %>%
+  filter(!between(hour(ts)*60 + minute(ts) + (second(ts)/60), 365, 367)) %>%
+  filter(!between(hour(ts)*60 + minute(ts) + (second(ts)/60), 545, 547)) %>%
+  filter(!between(hour(ts)*60 + minute(ts) + (second(ts)/60), 725, 727)) %>%
+  filter(!between(hour(ts)*60 + minute(ts) + (second(ts)/60), 905, 907)) %>%
+  filter(!between(hour(ts)*60 + minute(ts) + (second(ts)/60), 1085, 1087)) %>%
+  filter(!between(hour(ts)*60 + minute(ts) + (second(ts)/60), 1265, 1267))
 
 
 
 
-
-
-
-
-
-
-TIME1 <- "2023-07-31 16:00:00"
-TIME2 <- "2023-08-03 00:00:00"
+TIME1 <- "2023-08-17 00:00:00"
+TIME2 <- "2023-08-17 00:15:00"
 P1 <- dfAnalCorr %>% 
   filter(between(ts, ymd_hms(TIME1), ymd_hms(TIME2))) %>% 
   
@@ -171,19 +173,49 @@ P2 <- dfAnalCorr %>%
   scale_y_continuous(name = "HCl")
 grid.arrange(P1,P2,nrow = 2,ncol=1)
 
-dfAnalOut <- dfAnalCorr %>% 
-  select(!c("flag","ValveW"))
 
-write.csv(dfAnalOut,"G:/My Drive/Experiments/THECIX/20230731-20230813.csv",
+
+
+# cims <- read_csv("G:/My Drive/Experiments/THECIX/Data/cims/28_3_24.csv",skip=1) %>% 
+#   mutate(UTC = dmy_hm(UTC))
+# 
+# dummyTime <- data.frame("UTC"=seq(from= as.POSIXct("2023-07-28 04:12:00",tz="UTC"), 
+#                                  to = as.POSIXct("2023-08-21 12:30:00",tz="UTC"), 
+#                                  by = "1 min"))
+# 
+# outDF <- merge(dummyTime,cims, all= TRUE, by = "UTC")
+# write.csv(outDF, "G:/My Drive/Experiments/THECIX/Data/cims/28_3_24_1min.csv",quote=FALSE,
+#           row.names = FALSE)
+
+
+dummyTime <- data.frame("ts"=seq(from= as.POSIXct("2023-07-31 00:00:00",tz="UTC"), 
+                 to = as.POSIXct("2023-08-22 00:00:00",tz="UTC"), 
+                 by = "1 sec"))
+
+dfAnalOut <- dfAnalCorr %>% 
+  select(!c("flag","ValveW")) %>% 
+  mutate(ts = round_date(ts, unit = "second"))
+
+dfAnalOut <- merge(dummyTime,dfAnalOut, all= TRUE, by = "ts")
+
+
+write.csv(dfAnalOut,"G:/My Drive/Experiments/THECIX/20230731-20230821.csv",
           quote = FALSE,row.names = FALSE)
 
+
+
+tildas <- read_csv("G:/My Drive/Experiments/THECIX/20230731-20230821.csv") %>% 
+  drop_na() %>% 
+  mutate(ts = floor_date(ts, unit = "1 min")) %>% 
+  group_by(ts) %>% 
+  summarize(hcl = mean(hcl))
 
 dfAnalAvg <- dfAnalOut %>% 
   mutate(ts = floor_date(ts, unit = "10 min")) %>% 
   group_by(ts) %>% 
   summarize(hcl = mean(hcl))
 
-write.csv(dfAnalAvg,"G:/My Drive/Experiments/THECIX/hcl-bg-sub-1minavg.csv",
+write.csv(test,"G:/My Drive/Experiments/THECIX/hcl-foricartt.csv",
           quote = FALSE,row.names = FALSE)
 
 metCix <- read_csv("G:/My Drive/Experiments/THECIX/Data/met/met.csv") %>% 
