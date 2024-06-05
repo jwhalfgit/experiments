@@ -23,7 +23,7 @@
 
 
 
-TEMP = 273 # K
+TEMP = 279# K
 alpha <- 4.4e-6 * exp(2898/TEMP)
 
 kB = 1.380649e-23 # J / K
@@ -49,7 +49,6 @@ smps2022 <- read_csv("G:/My Drive/Experiments/OSCA/data/2022/smps.csv") %>%
   filter(between(ts, ymd_hm("2022-01-23 00:00"),ymd_hm("2022-02-28 00:00")))
 
 smps <- smps2022
-TEMP = 278
 
 # asol_d is aerosol diameters in nm.  We are assuming the relevant data
 # are number per cc 
@@ -71,7 +70,7 @@ kHCl <- 1/4 * alpha * (mean_speed_hcl*100)*total_SA
 ###################
 # Alfie's method
 
-mean_speed_alfie = sqrt(3*8.314 * 294 / 0.036458)*100 # cm/s 
+mean_speed_alfie = sqrt(3*8.314 * TEMP / 0.036458)*100 # cm/s 
 kHCl = total_SA / ((67e-9*100 / Dhcl)+(4/(mean_speed_alfie*alpha)))
 
 # 1/kHCl = 24.13 s
