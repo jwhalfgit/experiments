@@ -69,14 +69,19 @@ wet.cylinder.bg <- dfAnal %>%
 # 2 5.849278 0.04370436 0.9209502
 # 3 6.195331 0.07918537 0.9754352
 # 4 5.716541 0.03640522 0.9000512
+trueHcl <- mean(c(dryDF$hcl[1],dryDF$hcl[3]))
 
 dryDF <- data.frame(hcl = (dry.cylinder.pts$hclAvg - dry.cylinder.bg$hclAvg),
                     hclSd = sqrt(dry.cylinder.pts$hclSd^2 + dry.cylinder.bg$hclSd^2))
-dryDF$pctError <- dryDF$hcl / (5*4.7/3700*1000)
+#dryDF$pctError <- 1- (dryDF$hcl / (5*4.7/3700*1000))
+dryDF$pctError <- (dryDF$hcl - trueHcl) / trueHcl*100
+
 
 wetDF <- data.frame(hcl = (wet.cylinder.pts$hclAvg - wet.cylinder.bg$hclAvg),
                     hclSd = sqrt(wet.cylinder.pts$hclSd^2 + wet.cylinder.bg$hclSd^2))
-wetDF$pctError <- wetDF$hcl / c(5*4.7/3700*1000, 5*4.7/3700*1000, 2.5*4.7/3700*1000, 2.5*4.7/3700*1000)
+#wetDF$pctError <- 1-(wetDF$hcl / c(5*4.7/3700*1000, 5*4.7/3700*1000, 2.5*4.7/3700*1000, 2.5*4.7/3700*1000))
+wetDF$pctError <- (1-(wetDF$hcl / c(trueHcl, trueHcl, trueHcl/2, trueHcl/2)))*100
+
 # 
 # hcl      hclSd  pctError
 # 1 5.935944 0.06155121 0.9345954
