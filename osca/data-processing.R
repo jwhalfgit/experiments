@@ -119,7 +119,7 @@ P1 <- dfAnal %>%
   #scale_y_continuous(limits = c(-0.2,1), name = "HCl")
 
 
-# QC for Jordan -----------------------------------------------------------
+# QC -----------------------------------------------------------
 df.str <- as.data.frame(winterAvg)
 
 
@@ -156,6 +156,7 @@ P1 <- dfAnalNoFilter %>%
   geom_line()+
   scale_y_continuous(name = "HCl")
 #scale_y_continuous(limits = c(-0.2,1), name = "HCl")
+
 P2 <- dfAnal %>% 
   filter(between(ts, TIME1, TIME2)) %>% 
   ggplot(aes(x=ts,y=T.Laser.1)) +
@@ -165,7 +166,30 @@ grid.arrange(P1,P2,nrow = 2,ncol=1)
 
 
 dfAnalCorrRange <- filter.noise.Range(STR = dfAnalNoFilter60s,stdev = 1)
-dfAnalCorrChi <- filter.noise.chi(STR = dfAnalCorrRange, stdev = 1)
+dfAnalCorrChi <- filter.noise.chi(STR = dfAnalNoFilter, stdev = 1)
+
+
+
+dfAnalMerge <- merge(dfAnalNoFilter, blankAnalDF,all=TRUE) 
+
+
+dfAnalUnc <- dfAnalMerge %>% 
+  # uncertainty here comes from... uncertainty in blank, 2% from spectral fit,
+  # plus 2.3% variability in perm source.  this is larger than the anticipated
+  # offset from line loss.
+  mutate(hclBlankSd2 = sqrt(na.locf(hclBlankSd,na.rm = FALSE)^2 + (.02*hcl)^2 + (0.023*hcl)^2)) %>% 
+  select(ts,hcl, hclBlankSd2) %>% 
+  rename(hclUnc = hclBlankSd2) %>% 
+  filter(complete.cases(.)) %>% 
+  mutate(hcl = round(hcl, digits = 4), hclUnc = round(hclUnc,digits = 4)) %>% 
+  write.csv("G:/My Drive/Experiments/OSCA/data/2022/hclCEDA.csv",quote=FALSE,row.names=FALSE)
+
+
+
+
+
+
+length(dfAnalUnc$hclBlankSd)
 
 
 #dfAnalCorr <- filter.noise(STR = dfAnalCorrRange, stdev = 3)
@@ -255,11 +279,12 @@ ambBlanksSd <- lapply(ambBlanksList,
 ambBlanksDF <- do.call(rbind, ambBlanksMean)
 ambBlanksSdDF <- do.call(rbind, ambBlanksSd)
 blankAnalDF <- base::merge(ambBlanksDF,ambBlanksSdDF, all=TRUE)
+###############################################################
 blankAnalDF <- blankAnalDF[complete.cases(blankAnalDF),]
+# USE blankAnalDF FOR noise analysis!
+###############################################################
 
 x <- blankAnalDF[blankAnalDF$hclBlankSd >= quantile(blankAnalDF$hclBlankSd,(0+5/100)) & blankAnalDF$hclBlankSd <= quantile(blankAnalDF$hclBlankSd,(1-5/100)),]
-
-
 
 # ambPostBlank <- dfAnal %>% 
 #   filter(between(minute(ts)+ (second(ts)/60), 12,13) | 
@@ -428,6 +453,14 @@ names(calOut) <- c("ts","hcl","hclSd","hclSdPct")
 # 9  2022-02-19 21:09:00 1.839837 0.017755969 0.9650837
 # 10 2022-02-20 21:08:29 1.874669 0.028425193 1.5162777
 
+# 
+# > mean(calOut$hclSdPct,na.rm=TRUE)
+# [1] 1.200593
+
+# I think these cal points will just be on pump air overblows, no dry air
+# for comparison :( 
+
+
 calListFlatTs <- as.numeric(calListFlatFilter$ts) - as.numeric(calListFlatFilter$ts[1])
 # lmCal <- lm(calListFlatFilter$hcl~calListFlatTs)
 # 
@@ -435,6 +468,8 @@ calListFlatTs <- as.numeric(calListFlatFilter$ts) - as.numeric(calListFlatFilter
 #                              deltahcl = calListFlatFilter$hcl - (-1.618e-7*calListFlatTs + 2.074))
 # 
 #
+
+
 #
 #
 #
@@ -608,6 +643,59 @@ dfAnal <- df.str %>%
   # July 8
 
 
+ambBlanks <- dfAnal %>% 
+  filter(ValveW == 2, )
+
+ambBlanks <- dfAnal %>% 
+  filter(between(minute(ts)+ (second(ts)/60), 11,12) | 
+           between(minute(ts)+ (second(ts)/60), 21,22) | 
+           between(minute(ts)+ (second(ts)/60), 31,32) | 
+           between(minute(ts)+ (second(ts)/60), 41,42) |
+           between(minute(ts)+ (second(ts)/60), 51,52) |
+           between(hour(ts)*60 + minute(ts) + (second(ts)/60), 61, 62) | 
+           between(hour(ts)*60 + minute(ts) + (second(ts)/60), 121, 122) | 
+           between(hour(ts)*60 + minute(ts) + (second(ts)/60), 241, 242) | 
+           between(hour(ts)*60 + minute(ts) + (second(ts)/60), 301, 302) |
+           between(hour(ts)*60 + minute(ts) + (second(ts)/60), 421, 422)|
+           between(hour(ts)*60 + minute(ts) + (second(ts)/60), 481, 482)|
+           between(hour(ts)*60 + minute(ts) + (second(ts)/60), 601, 602)|
+           between(hour(ts)*60 + minute(ts) + (second(ts)/60), 661, 662) | 
+           between(hour(ts)*60 + minute(ts) + (second(ts)/60), 781, 782) | 
+           between(hour(ts)*60 + minute(ts) + (second(ts)/60), 841, 842) | 
+           between(hour(ts)*60 + minute(ts) + (second(ts)/60), 961, 962) |
+           between(hour(ts)*60 + minute(ts) + (second(ts)/60), 1021, 1022)|
+           between(hour(ts)*60 + minute(ts) + (second(ts)/60), 1141, 1142)|
+           between(hour(ts)*60 + minute(ts) + (second(ts)/60), 1201, 1202)|
+           between(hour(ts)*60 + minute(ts) + (second(ts)/60), 1321, 1322)|
+           between(hour(ts)*60 + minute(ts) + (second(ts)/60), 1381, 1382), 
+         ValveW == 2)
+
+ambBlanksList <- split.groups(ambBlanks)
+ambBlanksMean <- lapply(ambBlanksList,
+                        function(x){data.frame(ts=floor_date(median(x$ts),
+                                                             unit = "10 min"),
+                                               hclBlank = mean(x$hcl,na.rm = TRUE))})
+
+ambBlanksSd <- lapply(ambBlanksList,
+                      function(x){data.frame(ts=floor_date(median(x$ts),
+                                                           unit = "10 min"),
+                                             hclBlankSd = sd(x$hcl,na.rm=TRUE))})
+
+ambBlanksDF <- do.call(rbind, ambBlanksMean)
+ambBlanksSdDF <- do.call(rbind, ambBlanksSd)
+blankAnalDF <- base::merge(ambBlanksDF,ambBlanksSdDF, all=TRUE)
+###############################################################
+blankAnalDF <- blankAnalDF[complete.cases(blankAnalDF),]
+# USE blankAnalDF FOR noise analysis!
+###############################################################
+
+
+
+
+
+
+
+
 earlyData <- dfAnal %>% 
   filter(ts < ymd("2021-07-08"))
 
@@ -657,7 +745,7 @@ grid.arrange(P1,P2,nrow = 2,ncol=1)
 
 # QC for Jordan -----------------------------------------------------------
 df.str <- as.data.frame(dfOut[1:2])
-df.str$hcl <- df.str$hcl*1.0515 # applying loss factor to data.
+#df.str$hcl <- df.str$hcl*1.0515 # applying loss factor to data.
 str.xts <- xts(df.str[2:ncol(df.str)], order.by = df.str$ts, tzone = "UTC")
 
 # the stc.xts as loaded from load.tildas.data does not match time stamps from 
@@ -730,6 +818,24 @@ dfAnalCorrChi <- filter.noise.chi(STR = dfAnalCorrRange, stdev = 1)
 #                             coredata(outXtsAlt)) %>% 
 #   tibble() %>% 
 #   mutate(ts = ymd_hms(ts))
+
+
+
+dfAnalMerge <- merge(dfAnalNoFilter, blankAnalDF,all=TRUE) 
+  
+                   
+dfAnalUnc <- dfAnalMerge %>% 
+  # uncertainty here comes from... uncertainty in blank, 2% from spectral fit,
+  # plus 2.3% variability in perm source.  this is larger than the anticipated
+  # offset from line loss.
+  mutate(hclBlankSd2 = sqrt(na.locf(hclBlankSd,na.rm = FALSE)^2 + (.02*hcl)^2 + (0.0515*hcl)^2)) %>% 
+  select(ts,hcl, hclBlankSd2) %>% 
+  rename(hclUnc = hclBlankSd2) %>% 
+  filter(complete.cases(.)) %>% 
+  mutate(hcl = round(hcl, digits = 4), hclUnc = round(hclUnc,digits = 4)) %>% 
+  write.csv("G:/My Drive/Experiments/OSCA/data/2021/hclCEDA.csv",quote=FALSE,row.names=FALSE)
+
+
 
 
 # For Plotting
