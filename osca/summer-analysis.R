@@ -5,23 +5,75 @@ library(openair)
 
 OSCADATADIR <- file.path(EXPTDIR, "OSCA","data")
 
+timespan <- data.frame(date = seq(as.POSIXct("2021-06-10"),
+                                  as.POSIXct("2021-07-21"), by = 60))
+
+
 tildas <- read_csv(file.path(OSCADATADIR,"2021", "tildas.csv")) %>% 
   rename(date = ts) %>% 
-  mutate(hcl = hcl*1000) # ocnvert to pptv for CIMS consistency
+  mutate(hcl = hcl) # ocnvert to ppbv for CIMS consistency
+  
 
 clno2 <- read_csv(file.path(OSCADATADIR,"2021", "cims60sAvg.csv")) %>% 
-  rename(date = ts) %>% 
-  select(!contains(c("N2O5", "Cl2")))
+  rename(date = ts, clno2 = ClNO2_ppt) %>% 
+  select(!contains(c("N2O5", "Cl2"))) %>% 
+  mutate(across(!date, ~.x/1000))
 
 
-specrad <-read_csv(file.path(OSCADATADIR,"2021", "specrad.csv")) %>% 
-  rename(date = datetime) %>% 
-  mutate(date = dmy_hms(date) )
+  
+# specrad <-read_csv(file.path(OSCADATADIR,"2021", "specrad.csv")) %>% 
+#   rename(date = datetime) %>% 
+#   mutate(date = dmy_hms(date) )
+
+no2 <- read_csv(file.path(OSCADATADIR,"2021","no2.csv")) %>% 
+  rename(date = datetime, no2 = `NO2 (ppb)`) %>% 
+  select(!`NO2_qc_flags`)
+
+nonoy <- read_csv(file.path(OSCADATADIR,"2021","nox-noy.csv")) %>% 
+  rename(date = datetime, no=`NO (ppb)`, noy = `NOy (ppb)`)
 
 n2o5_cl2 <- read_csv(file.path(OSCADATADIR,"2021", "cims-n2o5-cl2.csv")) %>% 
-  rename(date = ts, Cl2_ppt = "Cl2_ppt*") %>% 
-  select(!contains("N2O5"))
+  rename(date = ts, cl2 = "Cl2_ppt*", n2o5 = "N2O5_ppt*") %>% 
+  mutate(across(!date, ~.x/1000))
+
+o3 <- read_csv(file.path(OSCADATADIR,"2021", "o3.csv")) %>% 
+  rename(date = datetime, o3 = "Ozone (ppb)") %>% 
+  select(!contains("qc"))
   
+
+so2 <- read_csv(file.path(OSCADATADIR,"2021", "noy_so2_yrk.csv")) %>% 
+  select(date, contains("so2")) %>% 
+  filter(qc_flag_so2_43i %in% c(0,1,2)) %>% 
+  rename(so2 = so2_43i) %>% 
+  select(date,so2)
+
+voc <- read_csv(file.path(OSCADATADIR,"2021", "gc.csv")) %>% 
+  filter(type == "Sample") %>% 
+  select(!contains("flag")) %>% 
+  select(!contains("uncertainty")) %>% 
+  select(!contains("channel")) %>% 
+  full_join(timespan) %>% 
+  arrange(date) %>% 
+  mutate(across(!(type), ~na.approx(.))) %>% 
+  select(!contains("type")) %>% 
+  mutate(date = as.POSIXct(date, origin="1970-01-01", tz = "UTC"))
+                
+                
+#                approx(~.x, n = n())$y))
+
+
+# This is the estimated BL height in m
+pblh <- read_csv(file.path(OSCADATADIR,"2021","maqs.csv")) %>% 
+  select(ts, "Estimated.Boundary.Layer.Height..m.","JO1D..s.1.","JNO2..s.1.") %>% 
+  rename(date = ts, pblh_m = "Estimated.Boundary.Layer.Height..m.",
+         jo1d= "JO1D..s.1.", jno2 = "JNO2..s.1.")
+
+met <- read_csv(file.path(OSCADATADIR,"2021", "fidas-met.csv")) %>% 
+  mutate(datetime = dmy_hm(datetime)) %>% 
+  select(!contains("flag"))
+names(met) = c("date","tempC","press","rh","tempK")
+
+
 
 acsm <- read_csv(file.path(OSCADATADIR,"2021", "acsm.csv")) %>% 
   mutate(datetime = dmy_hm(datetime)) %>% 
@@ -31,30 +83,91 @@ acsm <- read_csv(file.path(OSCADATADIR,"2021", "acsm.csv")) %>%
 
 xact2_5 <- read_csv(file.path(OSCADATADIR,"2021", "xact2_5.csv")) %>% 
   mutate(datetime = ymd_hms(datetime)) %>% 
-  select(c(datetime,contains("Cl"))) %>%
+  #select(c(datetime,contains("Cl"))) %>%
   select(!contains("flag")) %>% 
-  rename(date = datetime, pcl_2_5 = "PM2.5_Cl 17 (ug/m3)",
-         pcl_2_5_unc = "PM2.5_Cl Uncert (ug/m3)") 
+  select(!contains("Uncert")) %>% 
+  rename(date = datetime)
+  #rename(date = datetime, pcl_2_5 = "PM2.5_Cl 17 (ug/m3)",
+  #       pcl_2_5_unc = "PM2.5_Cl Uncert (ug/m3)") 
 
 
 xact10 <- read_csv(file.path(OSCADATADIR,"2021", "xact10.csv")) %>% 
   mutate(datetime = dmy_hm(datetime)) %>% 
-  select(c(datetime,contains("Cl"))) %>% 
+  #select(c(datetime,contains("Cl"))) %>% 
   select(!contains("flag")) %>% 
-  rename(date = datetime, pcl_10 = "PM10_Cl 17 (ug/m3)",
-         pcl_10_unc = "PM10_Cl Uncert (ug/m3)")
+  select(!contains("Uncert")) %>% 
+  
+  rename(date = datetime)
+  #rename(date = datetime, pcl_10 = "PM10_Cl 17 (ug/m3)",
+  #       pcl_10_unc = "PM10_Cl Uncert (ug/m3)")
 
-met <- read_csv(file.path(OSCADATADIR,"2021", "fidas-met.csv")) %>% 
+smps <- read_csv(file.path(OSCADATADIR,"2021", "smps.csv")) %>% 
   mutate(datetime = dmy_hm(datetime)) %>% 
-  select(!contains("flag"))
-names(met) = c("date","tempC","press","rh","tempK")
+  rename(date = datetime)
 
 
-voc <- read_csv(file.path(OSCADATADIR,"2021", "gc.csv")) %>% 
-  select(!contains("flag")) %>% 
-  select(!contains("uncertainty"))
+dfMaster <- tildas %>% 
+  full_join(clno2) %>% 
+  full_join(no2) %>% 
+  full_join(nonoy) %>% 
+  full_join(n2o5_cl2) %>% 
+  full_join(o3) %>% 
+  full_join(so2) %>% 
+  full_join(voc) %>% 
+  full_join(pblh) %>% 
+  full_join(met) %>% 
+  full_join(acsm) %>% 
+  full_join(xact2_5) %>% 
+  full_join(xact10) %>% 
+  full_join(smps) %>% 
+  arrange(date) %>% 
+  select(!contains("Diff")) %>% 
+  select(!contains("qc"))
+  
+  
+  
+dfMasterOut <- dfMaster %>%
+  filter(between(date, ymd("2021-06-10"), ymd("2021-07-22"))) %>% 
+  mutate(date = floor_date(date,"10 min")) %>% 
+  group_by(date) %>% 
+  summarise_all(mean,na.rm=TRUE)
+  
+write_csv(dfMasterOut, file.path(OSCADATADIR, "2021", "dfMaster.csv"))
 
-maqs <- read_csv(file.path(OSCADATADIR,"2021", "maqs.csv"))
+
+  
+namesForAnal <- names(dfMaster)[2:ncol(dfMaster)]
+
+forDiurnal <- dfMaster %>% 
+  filter(between(date,ymd("2021-06-11"),ymd("2021-06-18")))
+
+
+dfDiurnal<- timeVariation(forDiurnal,
+                             pollutant = namesForAnal,plot = FALSE)$data$hour %>% 
+  mutate(Upper = Upper - Mean) %>% 
+  mutate(Lower = Mean - Lower) 
+  
+  
+dfDiurnalOut <- dfDiurnal %>%  
+  group_by(variable) %>% 
+  select(!c("default","ci")) %>% 
+  arrange(variable) %>%
+  pivot_wider(names_from=variable,values_from = c(Mean, Lower, Upper))
+
+  
+write_csv(dfDiurnalOut, file.path(OSCADATADIR, "2021", "dfMasterDiurnal.csv"))
+
+
+justMeans <- dfDiurnalOut %>% 
+  select(hour,contains("Mean"))
+names(justMeans) <- gsub("Mean_","",names(justMeans))
+
+write_csv(justMeans, file.path(OSCADATADIR, "2021", "dfMasterDiurnal_justmeans.csv"))
+
+  
+
+
+#maqs <- read_csv(file.path(OSCADATADIR,"2021", "maqs.csv"))
   
   
 
