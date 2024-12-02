@@ -13,6 +13,8 @@ dfT200 <- do.call(rbind,fileListNO) %>%
 write.csv(dfT200,"C:/Users/jh2949/OneDrive - University of York/Desktop/CIMS_analysis/HONO/T200/no-stitch.csv",
            quote = FALSE, row.names = FALSE)
 
+dfT200 <- read_csv("C:/Users/jh2949/OneDrive - University of York/Desktop/CIMS_analysis/HONO/T200/no-stitch.csv")
+
 
 t200List <- list()
 
@@ -31,6 +33,35 @@ t200Df <- do.call(rbind, t200List) %>%
   mutate(NOcorr = T200_NO - T200_NO[flag == "bg"])
 
 # LOPAP -------------------------------------------------------------------
+
+ffLopap <- list.files("C:/Users/jh2949/OneDrive - University of York/Desktop/CIMS_analysis/HONO/LOPAP",
+                   full.names=TRUE, pattern = ".csv")
+
+fileListLopap <- lapply(ffLopap,read_csv)
+
+dfLopap <- do.call(rbind,fileListLopap) %>% 
+  mutate(date = ymd_hms(date)) %>% 
+  select(date, hono)
+
+write.csv(dfT200,"C:/Users/jh2949/OneDrive - University of York/Desktop/CIMS_analysis/HONO/T200/no-stitch.csv",
+          quote = FALSE, row.names = FALSE)
+
+
+
+lopapList <- list()
+
+for(ix in 1:nrow(calTimes)){
+  lopapList[[ix]] <- dfLopap %>% 
+    filter(between(date,ymd_hms(calTimes[[ix,1]]),ymd_hms(calTimes[[ix,2]]))) %>% 
+    mutate(grp = calTimes$event[ix])
+}
+
+lopapDf <- do.call(rbind, lopapList) %>% 
+  group_by(grp) %>% 
+  summarise_all(mean,na.rm=TRUE) %>% 
+  ungroup() %>% 
+  
+
 
 
 
@@ -62,7 +93,7 @@ dfCims %>%
 write.csv(dfCims,"C:/Users/jh2949/OneDrive - University of York/Desktop/CIMS_analysis/HONO/CIMS/cims-stitch.csv",
           quote = FALSE, row.names = FALSE)
 # 
-
+dfCims <- read_csv("C:/Users/jh2949/OneDrive - University of York/Desktop/CIMS_analysis/HONO/CIMS/cims-stitch.csv")
 
 
 # CIMS-HR -----------------------------------------------------------------
@@ -74,7 +105,7 @@ calTimes <- read_csv("C:/Users/jh2949/OneDrive - University of York/Desktop/CIMS
 cimsTimes <- calTimes %>% 
   mutate(st = st - 3600, et = et - 3600)
 
-cimsHR <- read_csv("C:/Users/jh2949/OneDrive - University of York/Desktop/CIMS_analysis/HONO/CIMS/drycal-hr.csv") %>% 
+cimsHR <- read_csv("C:/Users/jh2949/OneDrive - University of York/Desktop/CIMS_analysis/HONO/CIMS/HR/drycal-hr.csv") %>% 
   replace(. < 0, 0) %>% 
   mutate(hononorm = ifelse(I!=0,IHONO/(I + IH2O),NA)) %>% 
   mutate(iratio = ifelse(I!=0,IH2O / I, NA))
@@ -108,6 +139,49 @@ dfCaps <- do.call(rbind,fileListNo2) %>%
 
 # write.csv(df,"G:/My Drive/Experiments/CIMS/calibrations/no2-stitch.csv",
 #           quote = FALSE, row.names = FALSE)
+
+
+
+
+# HONO COMPARE ------------------------------------------------------------
+
+cimsTimes <- calTimes %>% 
+  mutate(st = st - 3600, et = et - 3600)
+
+cimsHR <- read_csv("C:/Users/jh2949/OneDrive - University of York/Desktop/CIMS_analysis/HONO/CIMS/drycal-hr.csv") %>% 
+  replace(. < 0, 0) %>% 
+  mutate(hononorm = ifelse(I!=0,IHONO/(I + IH2O),NA)) %>% 
+  mutate(iratio = ifelse(I!=0,IH2O / I, NA))
+
+cimsList <- list()
+
+for(ix in 1:nrow(cimsTimes)){
+  cimsList[[ix]] <- cimsHR %>% 
+    filter(between(ts,ymd_hms(cimsTimes[[ix,1]]),ymd_hms(cimsTimes[[ix,2]]))) %>% 
+    mutate(grp = cimsTimes$event[ix])
+}
+
+cimsHrDf <- do.call(rbind, cimsList) %>% 
+  group_by(grp) %>% 
+  summarise_all(mean,na.rm=TRUE) %>% 
+  mutate(flag = cimsTimes$type) %>% 
+  mutate(hononormCorr = hononorm - hononorm[flag == "bg"])
+
+
+plot(t200Df$NOcorr,cimsHrDf$hononormCorr, pch = 19)
+
+plot(lopapDf$hono,cimsHrDf$hononormCorr, pch = 19)
+
+plot(lopapDf$hono,t200Df$NOcorr*1000, pch = 19)
+
+
+
+
+
+
+
+
+
 
 
 # Load times --------------------------------------------------------------
