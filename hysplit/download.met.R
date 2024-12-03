@@ -1,6 +1,6 @@
 # Used for downloading met files from the NOAA repository
 
-METFILEDIR <- "C:/HYSPLIT/metfiles"
+METFILEDIR <- "C:/HYSPLIT/metfiles/"
 
 
 # getMet() function from David Carslaw's openair book:
