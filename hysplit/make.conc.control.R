@@ -14,7 +14,7 @@ library(xts)
 # Met files
 
 met.file.loc <- "C:/HYSPLIT/metfiles/" # HYSPLIT met file directory
-wd.hysplit <- "C:/HYSPLIT/trunk/working" # HYSPLIT working directory
+wd.hysplit <- "C:/HYSPLIT/working" # HYSPLIT working directory
 
 sites <- as.data.frame(matrix(data = c(53.4542503,-2.2487979,"Manchester Air Quality Site",
                                        52.476145, -1.874978, "Birmingham Roadside Site"),ncol=3,byrow=TRUE,dimnames = list(c(),c("lat","lon","loc"))))
@@ -105,19 +105,9 @@ met.file.list.syntax <- function(MET.FILES){
 # time.loc() will build a data.frame of times and GPS locations
 # to be injected into separate CONTROL files.  It will determine
 # the number of runs for each event.
-time.loc <- function(START,END){
-  START <- as.POSIXct(START, tz='UTC')
-  END <- as.POSIXct(END,tz='UTC')
-  
-  # Step 1: Generate a vector of trajectory start times.  
-  # This will also tell us how many trajectories we will run.
-  # I think it makes sense to run one each hour during an event
-  # since we have batch capabilities.
-  time.seq <- seq.POSIXt(from=START,to=END,by="hours")
-  
-  # Step 2: Convert each time into a start time usable by 
-  # HYSPLIT.  This is "YY MM DD HH MM SS" (but we won't use MM SS).
-  st.hysplit <- sapply(time.seq, function(x){format(x,"%y %m %d %H")})
+time.syntax <- function(TIMES){
+
+  st.hysplit <- sapply(TIMES, function(x){format(x,"%y %m %d %H")})
   # if(length(GPS)==2){
   #   gps.hysplit <- data.frame(lat=GPS[1],lon=GPS[2])
   # }else{
@@ -128,9 +118,7 @@ time.loc <- function(START,END){
   time.df <- data.frame(st.hysplit,row.names=NULL)
   names(time.df) <- c("start.time")
   time.df$start.time <- as.character(time.df$start.time)
-  # Step 4: Round GPS value to the nearest degree.  Resolution of Met files is 2.5deg.
-  
-  
+
   return(time.df)
 }
 
@@ -158,7 +146,7 @@ build.ctrl <- function(TIME.LOC, GPS, HEIGHTS=10, RT=-24, VERT=0, BL.height = 40
   loc <- unlist(locList)
   
   #loc <- sapply(HEIGHTS,function(x){paste(GPS[1], GPS[2], x, sep=" ")})
-  
+  no.loc.height <- length(loc)
   
   traj.st <- as.POSIXct(TIME.LOC[1], format="%y %m %d %H",tz = "UTC")
   NAME <- format(traj.st,"%Y%m%d%H")
@@ -179,13 +167,13 @@ build.ctrl <- function(TIME.LOC, GPS, HEIGHTS=10, RT=-24, VERT=0, BL.height = 40
   #SETUP INFO
   # includes lines for start time, location, heights, met files../.
   writeLines(as.character(c(TIME.LOC[1], # Traj start time
-               no.heights, # number of starting heights
+               no.loc.height, # number of starting locations and heights
                loc, # lat,lon,starting height
                RT, # run time
                VERT, # vertical motion method
                BL.height, # top of the model
                length(met.files), # number of met files
-               met.syntax)), #filepaths for relevant met files,
+               met.syntax, #filepaths for relevant met files,
                # "1", # pollutant no.
                # "O3", #name of said pollutant
                # "1.0", # emission rate (units/hr)
@@ -195,8 +183,8 @@ build.ctrl <- function(TIME.LOC, GPS, HEIGHTS=10, RT=-24, VERT=0, BL.height = 40
                # "0.0 0.0", # center of lat /lon
                # "0.25 0.25", # grid spacing
                # "30.0 180", # grid span from starting loc
-               # paste(WD,"/",sep=""), # output dir
-               # paste("cback-",NAME,".bin",sep=""), # conc output filename
+               paste(WD,"/",sep=""), # output dir
+               paste("tback-",NAME,sep=""))), # conc output filename
                # "1", # no of vertical levels
                # "50", #averaging height, i.e. 0-Xm where x is the top of the avg height
                # "00 00 00 00 00", #sampling start time
@@ -214,8 +202,8 @@ build.ctrl <- function(TIME.LOC, GPS, HEIGHTS=10, RT=-24, VERT=0, BL.height = 40
 }
 
 
-projTimes <- seq(from=as.POSIXct("2024-04-20 01:00:00",tz="UTC"), 
-                      to = as.POSIXct("2024-04-22 01:00:00",tz="UTC"), by="hour")
+projTimes <- seq(from=as.POSIXct("2023-04-20 00:00:00",tz="UTC"), 
+                      to = as.POSIXct("2023-04-22 00:00:00",tz="UTC"), by="6 hours")
 
 make.ctrl.files <- function(LOC = sites, TIMES = projTimes){
 
@@ -227,7 +215,7 @@ make.ctrl.files <- function(LOC = sites, TIMES = projTimes){
 
   # time.loc() will build a data frame for each event with GPS and times throughout
   # the trajectory.  I guess I need to mapply it?
-  ctrl.files <- time.loc(START = st, END = et)
+  ctrl.files <- time.syntax(TIMES)
   # Make appropriate directory tree:
   # buoyN
   # bin control particle plot
