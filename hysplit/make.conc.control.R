@@ -16,8 +16,12 @@ library(xts)
 met.file.loc <- "C:/HYSPLIT/metfiles/" # HYSPLIT met file directory
 wd.hysplit <- "C:/HYSPLIT/working" # HYSPLIT working directory
 
-sites <- as.data.frame(matrix(data = c(53.4542503,-2.2487979,"Manchester Air Quality Site",
-                                       52.476145, -1.874978, "Birmingham Roadside Site"),ncol=3,byrow=TRUE,dimnames = list(c(),c("lat","lon","loc"))))
+sites <- as.data.frame(matrix(data = c(53.44,-2.21,"Manchester Air Quality Site",
+                                       52.45, -1.93, "Birmingham Super Site",
+                                       54.98, -1.61, "Newcastle Center",
+                                       55.95, -3.20, "Edinburgh Center",
+                                       54.60, -5.93, "Belfast Center",
+                                       51.48, -3.18, "Cardiff Center"),ncol=3,byrow=TRUE,dimnames = list(c(),c("lat","lon","loc"))))
 
 sites$lat <- as.numeric(sites$lat)
 sites$lon <- as.numeric(sites$lon)
@@ -56,29 +60,29 @@ get.met.code <- function(TIME){
 # NOTE: THIS WILL NOT WORK FOR DATA AFTER JULY!!!
 # (technically won't work for any data without the
 # corresponding met files)
-# met.files.ctrl <- function(START.CODE, END.CODE, MET.FILE.LIST){
-#   month.st <- as.numeric(strsplit(START.CODE,"[.]")[[1]][1])
-#   month.et <- as.numeric(strsplit(END.CODE,"[.]")[[1]][1])
-# #   if(month.st>=7||month.st<=2||month.et>=7||month.et<=2){
-# #     return(NULL)
-# #   }else{
-#     start.ix <- grep(START.CODE, MET.FILE.LIST)
-#     end.ix <- grep(END.CODE, MET.FILE.LIST)
-#     return(MET.FILE.LIST[(end.ix-1):(start.ix+1)])
-#   #}
-# }
+met.files.ctrl <- function(START.CODE, END.CODE, MET.FILE.LIST){
+  month.st <- as.numeric(strsplit(START.CODE,"[.]")[[1]][1])
+  month.et <- as.numeric(strsplit(END.CODE,"[.]")[[1]][1])
+#   if(month.st>=7||month.st<=2||month.et>=7||month.et<=2){
+#     return(NULL)
+#   }else{
+    start.ix <- grep(START.CODE, MET.FILE.LIST)
+    end.ix <- grep(END.CODE, MET.FILE.LIST)
+    return(MET.FILE.LIST[(end.ix-1):(start.ix+1)])
+  #}
+}
 
 
 # This is for the renalysis(RA) met data
-met.files.ctrl.RA <- function(START, END, MET.FILE.LIST){
-  month.st <- format(START, "%Y%m")
-  month.et <- format(END, "%Y%m")
-
-  start.ix <- grep(pattern = month.st, x=  MET.FILE.LIST)
-  end.ix <- grep(pattern = month.et, x= MET.FILE.LIST)
-  return(MET.FILE.LIST[(end.ix-1):(start.ix+1)])
-  #}
-}
+# met.files.ctrl.RA <- function(START, END, MET.FILE.LIST){
+#   month.st <- format(START, "%Y%m")
+#   month.et <- format(END, "%Y%m")
+# 
+#   start.ix <- grep(pattern = month.st, x=  MET.FILE.LIST)
+#   end.ix <- grep(pattern = month.et, x= MET.FILE.LIST)
+#   return(MET.FILE.LIST[(end.ix-1):(start.ix+1)])
+#   #}
+# }
 
 #GDAS versuib
 # met.file.list.syntax <- function(MET.FILES,YEAR){
@@ -127,11 +131,11 @@ time.syntax <- function(TIMES){
 # user-defined variables.  HEIGHTS represents height of particle release, RT is run time,
 # VERT represents the vertical transport method.  Met files typially have this 
 # within them, so I just leave it at 0.  
-build.ctrl <- function(TIME.LOC, GPS, HEIGHTS=10, RT=-24, VERT=0, BL.height = 4000, 
+build.ctrl <- function(TIME.LOC, GPS, HEIGHTS=10, RT=-48, VERT=0, BL.height = 4000, 
                        WD = wd.hysplit){
   gps <- GPS[1:2]
-  gps$lat <- round(as.numeric(gps$lat), 0)
-  gps$lon <- round(as.numeric(gps$lon), 0)
+  gps$lat <- round(as.numeric(gps$lat), 2)
+  gps$lon <- round(as.numeric(gps$lon), 2)
   
   
   no.heights = length(HEIGHTS)
@@ -153,9 +157,15 @@ build.ctrl <- function(TIME.LOC, GPS, HEIGHTS=10, RT=-24, VERT=0, BL.height = 40
     
   # Need to determine which met files we need.
   traj.et <- traj.st - as.difftime(-RT,units="hours")
-  # met.file.list <- list.files(paste(met.file.loc,format(traj.st,"%Y"),sep=""))
   met.file.list <- list.files(met.file.loc)
-  met.files <- met.files.ctrl.RA(START=traj.st,END=traj.et,
+  
+  
+  # Because the met files are discriminated by weeks, it is important to 
+  # only select the necessary met files so HYSPLIT doesn't over-burden itself
+  # by reading in too many met files.  get.met.code() will take timestamps
+  # and output the month.week, which met.files.ctrl will take as input to 
+  # return the necessary met files.
+  met.files <- met.files.ctrl(START=get.met.code(traj.st),END=get.met.code(traj.et),
                               MET.FILE.LIST=met.file.list)
   if(is.null(met.files)){
     return(NULL)
@@ -202,14 +212,14 @@ build.ctrl <- function(TIME.LOC, GPS, HEIGHTS=10, RT=-24, VERT=0, BL.height = 40
 }
 
 
-projTimes <- seq(from=as.POSIXct("2023-04-20 00:00:00",tz="UTC"), 
-                      to = as.POSIXct("2023-04-22 00:00:00",tz="UTC"), by="6 hours")
+projTimes <- seq(from=as.POSIXct("2023-01-03 00:00:00",tz="UTC"), 
+                      to = as.POSIXct("2023-12-31 23:00:00",tz="UTC"), by="12 hours")
 
 make.ctrl.files <- function(LOC = sites, TIMES = projTimes){
 
   # Now we should load the file and create vectors of the start and stop times:
-  st <- TIMES[1]
-  et <- TIMES[length(TIMES)]
+  # st <- TIMES[1]
+  # et <- TIMES[length(TIMES)]
 
   gps <- LOC[,1:2]
 
@@ -224,7 +234,7 @@ make.ctrl.files <- function(LOC = sites, TIMES = projTimes){
   #for(ix in 1:length(ctrl.files)){
 
     # ed <- file.path(wd.hysplit,LOC,YEAR,ix) # ed for "event directory"
-    ed <- file.path(wd.hysplit) # ed for "event directory"
+    ed <- file.path(wd.hysplit,"trajectories") # ed for "event directory"
     cd <- file.path(ed,"control")
     bd <- file.path(ed, "bin")
     pd <- file.path(ed, "particle")
