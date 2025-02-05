@@ -18,7 +18,7 @@ wd.hysplit <- "C:/HYSPLIT/working" # HYSPLIT working directory
 TRAJDIR <- "G:/My Drive/Experiments/DEFRA/hysplit/trajectories/"
 PLOTDIR <- file.path(TRAJDIR,"plots/")
 
-YEAR = 2021
+YEARS = 2021
 
 sites <- as.data.frame(matrix(data = c(53.44,-2.21,"Manchester Air Quality Site",
                                        52.45, -1.93, "Birmingham Super Site",
