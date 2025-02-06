@@ -13,12 +13,10 @@ library(doParallel)
 registerDoParallel(cores= 4)
 
 
-met.file.loc <- "C:/HYSPLIT/metfiles/" # HYSPLIT met file directory
-wd.hysplit <- "C:/HYSPLIT/working" # HYSPLIT working directory
 TRAJDIR <- "G:/My Drive/Experiments/DEFRA/hysplit/trajectories/"
 PLOTDIR <- file.path(TRAJDIR,"plots/")
 
-YEARS = 2021
+YEARS2LOAD = c(2021,2022) # include all years you want loaded
 
 sites <- as.data.frame(matrix(data = c(53.44,-2.21,"Manchester Air Quality Site",
                                        52.45, -1.93, "Birmingham Super Site",
@@ -35,19 +33,16 @@ sites$lon <- as.numeric(sites$lon)
 # this is an edited version of trajectory_read from the splitr package.
 # It correctly adds receptor column information.  It is important
 # the HYSPLIT output file have the prefix "tback"
-trajectory_read_alt <- function (output_folder, YEARS){
-  if(is.na(YEARS)!=TRUE){
-    trajectory_file_list <- list.files(path = output_folder, 
-                                       pattern = "^tback-.*")
-  }else{
-    tfl <- list()
+trajectory_read_alt <- function (output_folder, YEARS=YEARS2LOAD){
+  tfl <- list()
     
     for(ix in 1:length(YEARS)){
       tfl[[ix]]<- list.files(path = output_folder, 
                              pattern = paste0("tback-", YEARS[ix]))
     }
-    trajectory_file_list <- unlist(tfl)
-  }
+  
+  trajectory_file_list <- unlist(tfl)
+    
   traj_tbl <- dplyr::tibble(receptor = integer(0), year = integer(0), 
                             month = integer(0), day = integer(0), hour = integer(0), 
                             hour_along = integer(0), lat = numeric(0), lon = numeric(0), 
@@ -124,19 +119,16 @@ trajectory_read_alt <- function (output_folder, YEARS){
 
 
 
-trajectory_read_alt_Par <- function (output_folder, YEARS){
-  if(is.na(YEARS)!=TRUE){
-    trajectory_file_list <- list.files(path = output_folder, 
-                                       pattern = "^tback-.*")
-  }else{
-    tfl <- list()
+trajectory_read_alt_Par <- function (output_folder, YEARS=YEARS2LOAD){
+  tfl <- list()
     
-    for(ix in 1:length(YEARS)){
-      tfl[[ix]]<- list.files(path = output_folder, 
-                             pattern = paste0("tback-", YEARS[ix]))
-    }
-    trajectory_file_list <- unlist(tfl)
+  for(ix in 1:length(YEARS)){
+    tfl[[ix]]<- list.files(path = output_folder, 
+                           pattern = paste0("tback-", YEARS[ix]))
   }
+  
+  trajectory_file_list <- unlist(tfl)
+  
   traj_tbl <- dplyr::tibble(receptor = integer(0), year = integer(0), 
                             month = integer(0), day = integer(0), hour = integer(0), 
                             hour_along = integer(0), lat = numeric(0), lon = numeric(0), 
@@ -231,7 +223,7 @@ trajectory_read_alt_Par <- function (output_folder, YEARS){
 # 7 51.45 -0.04  London Super Site
 
 
-trajDF <- trajectory_read_alt_Par(TRAJDIR, YEAR = YEAR) # this loads the data per splitr.
+trajDF <- trajectory_read_alt_Par(TRAJDIR, YEARS = YEARS2LOAD) # this loads the data per splitr.
 # I will reformat to work with openair
 trajDF_oa <- trajDF %>% 
   rename(hour.inc = hour_along,
