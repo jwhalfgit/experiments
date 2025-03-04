@@ -8,7 +8,7 @@ METFILEDIR <- "C:/HYSPLIT/metfiles/"
 #
 
 
-getMet <- function(year = 2013, month = 1, path_met = METFILEDIR) {
+getMet <- function(year = 2021, month = 1, path_met = METFILEDIR) {
   
   for (i in seq_along(year)) {
     for (j in seq_along(month)) {
@@ -29,7 +29,7 @@ getMet <- function(year = 2013, month = 1, path_met = METFILEDIR) {
 
 # getMetGdas is an altered function of getMet for use with 1 degree GDAS
 # files
-getMetGdas <- function(year = 2023, month = 5:12, path_met = METFILEDIR) {
+getMetGdas <- function(year = 2021, month = 1:12, path_met = METFILEDIR) {
   selectMonths <- tolower(month.abb[month])
   for (i in seq_along(year)) {
     for (j in seq_along(month)) {
@@ -37,7 +37,8 @@ getMetGdas <- function(year = 2023, month = 5:12, path_met = METFILEDIR) {
         for(k in 1:4){
         download.file(
           url = paste0(
-            "https://www.ready.noaa.gov/data/archives/gdas1/gdas1.",
+            #"https://www.ready.noaa.gov/data/archives/gdas1/gdas1.",
+            "ftp://ftp.arl.noaa.gov/archives/gdas1/gdas1.",
              selectMonths[j],sub("20","",year[i]), ".w",k
           ),
           destfile = paste0(
@@ -49,7 +50,8 @@ getMetGdas <- function(year = 2023, month = 5:12, path_met = METFILEDIR) {
           for(k in 1:5){
             download.file(
               url = paste0(
-                "https://www.ready.noaa.gov/data/archives/gdas1/gdas1.",
+                #"https://www.ready.noaa.gov/data/archives/gdas1/gdas1.",
+                "ftp://ftp.arl.noaa.gov/archives/gdas1/gdas1.",
                 selectMonths[j],sub("20","",year[i]), ".w",k
               ),
               destfile = paste0(
@@ -63,4 +65,7 @@ getMetGdas <- function(year = 2023, month = 5:12, path_met = METFILEDIR) {
   }
 }
 
-getMet(year = 2023, month = 1:12)
+getMetGdas(year = 2024, month = 1:12)
+
+
+
