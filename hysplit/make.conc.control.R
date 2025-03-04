@@ -13,7 +13,7 @@ library(xts)
 # Run lengths
 # Met files
 
-met.file.loc <- "C:/HYSPLIT/metfiles/" # HYSPLIT met file directory
+met.file.loc <- "D:/HYSPLIT/metfiles/" # HYSPLIT met file directory
 wd.hysplit <- "C:/HYSPLIT/working" # HYSPLIT working directory
 
 sites <- as.data.frame(matrix(data = c(53.44,-2.21,"Manchester Air Quality Site",
@@ -21,7 +21,13 @@ sites <- as.data.frame(matrix(data = c(53.44,-2.21,"Manchester Air Quality Site"
                                        54.98, -1.61, "Newcastle Center",
                                        55.95, -3.20, "Edinburgh Center",
                                        54.60, -5.93, "Belfast Center",
-                                       51.48, -3.18, "Cardiff Center"),ncol=3,byrow=TRUE,dimnames = list(c(),c("lat","lon","loc"))))
+                                       51.48, -3.18, "Cardiff Center",
+                                       51.45, -0.04,  "London Super Site",
+                                       51.08, -4.10, "Barnstaple Center",
+                                       55.79, -3.24, "Auchencorth Moss",
+                                       51.15, -1.44, "Chilbolton Observatory"),
+                              ncol=3,byrow=TRUE,dimnames = list(c(),c("lat","lon","loc"))))
+
 
 sites$lat <- as.numeric(sites$lat)
 sites$lon <- as.numeric(sites$lon)
@@ -34,6 +40,7 @@ sites$lon <- as.numeric(sites$lon)
 # needed for the analysis.  NOTE THIS IS ONLY 
 # NEEDED FOR GDAS DATA!! NOT USEFUL FOR REANALYSIS DATA
 get.met.code <- function(TIME){
+  year <- format(TIME, "%Y")
   month <- format(TIME, "%m")
   day <- as.numeric(format(TIME,"%d"))
 
@@ -48,7 +55,7 @@ get.met.code <- function(TIME){
   }else if(day%in%29:31){
     week <- "w5"
   }
-  return(paste(month,week,sep="."))
+  return(paste0(year,month,".",week))
 }
 
 
@@ -131,7 +138,7 @@ time.syntax <- function(TIMES){
 # user-defined variables.  HEIGHTS represents height of particle release, RT is run time,
 # VERT represents the vertical transport method.  Met files typially have this 
 # within them, so I just leave it at 0.  
-build.ctrl <- function(TIME.LOC, GPS, HEIGHTS=10, RT=-48, VERT=0, BL.height = 4000, 
+build.ctrl <- function(TIME.LOC, GPS, HEIGHTS=10, RT=-72, VERT=0, BL.height = 1000, 
                        WD = wd.hysplit){
   gps <- GPS[1:2]
   gps$lat <- round(as.numeric(gps$lat), 2)
@@ -212,8 +219,8 @@ build.ctrl <- function(TIME.LOC, GPS, HEIGHTS=10, RT=-48, VERT=0, BL.height = 40
 }
 
 
-projTimes <- seq(from=as.POSIXct("2023-01-03 00:00:00",tz="UTC"), 
-                      to = as.POSIXct("2023-12-31 23:00:00",tz="UTC"), by="12 hours")
+projTimes <- seq(from=as.POSIXct("2017-01-04 00:00:00",tz="UTC"), 
+                      to = as.POSIXct("2024-12-31 12:00:00",tz="UTC"), by="12 hours")
 
 make.ctrl.files <- function(LOC = sites, TIMES = projTimes){
 
