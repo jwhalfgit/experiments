@@ -13,7 +13,7 @@ library(doParallel)
 registerDoParallel(cores= 4)
 
 # Load the trajDF.Rds workspace saved from hysplit.load.R
-load("G:/My Drive/Experiments/DEFRA/hysplit/trajDF.Rds")
+load("G:/My Drive/Experiments/DEFRA/hysplit/trajDF_oa.Rds")
 
 # Generate individual site data.frames
 maqs <- trajDF_oa %>% filter(receptor == 1) 
