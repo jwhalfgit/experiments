@@ -261,4 +261,4 @@ trajDF_oa <- trajDF %>%
                          `9` = sites$loc[9],
                          `10` = sites$loc[10]))
 
-
+# save(trajDF_oa, file="G:/My Drive/Experiments/DEFRA/hysplit/trajDF_oa.Rds")
