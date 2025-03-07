@@ -1,3 +1,17 @@
+# hysplit.load.R is used to load raw HYSPLIT trajectories and convert to openair
+# format for use with its functions. Set "TRAJDIR" to wherever you have the
+# trajectories stored on your machine.  
+
+# trajectory_read_alt() is flexible enough to load single sites or combinations 
+# of multiple sites and heights if that's what's in the trajectory file.
+
+# trajectory_read_alt_Par() is the same, but loads trajectories in parrallel 
+# if your cpu has multiple cores.  The number of cores can be set below using
+# registerDoParallel()
+
+# 
+
+
 library(splitr)
 library(openair)
 library(gridExtra)
