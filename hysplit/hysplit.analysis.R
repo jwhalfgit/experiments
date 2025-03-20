@@ -57,8 +57,8 @@ chilb <- trajDF_oa %>% filter(receptor == 10)
 ################################################################################
 
 
-DATE1 <- "01/01/2017"
-DATE2 <- "31/12/2024"
+DATE1 <- "01/03/2024"
+DATE2 <- "31/05/2024"
 
 maqsFreq <- plotTrajBin(DF = maqs,DATE1 = DATE1, DATE2 = DATE2)
 bssFreq <- plotTrajBin(DF = bss,DATE1 = DATE1, DATE2 = DATE2)
@@ -68,12 +68,14 @@ ccFreq <- plotTrajBin(DF = cc,DATE1 = DATE1, DATE2 = DATE2)
 bcFreq <- plotTrajBin(DF = bc,DATE1 = DATE1, DATE2 = DATE2)
 ecFreq <- plotTrajBin(DF = ec,DATE1 = DATE1, DATE2 = DATE2)
 ncFreq <- plotTrajBin(DF = nc,DATE1 = DATE1, DATE2 = DATE2)
-
-
+amFreq <- plotTrajBin(DF = am,DATE1 = DATE1, DATE2 = DATE2)
+chilbFreq <- plotTrajBin(DF = chilb,DATE1 = DATE1, DATE2 = DATE2)
 
 # Difference Plots --------------------------------------------------------
 
 # Look at seasonal differences 
+
+
 seasDates <- data.frame(START = c("01/01/2021","01/04/2021","01/07/2021", "01/10/2021"),
                         STOP = c("31/03/2021","30/06/2021","30/09/2021", "31/12/2021"))
  
@@ -141,135 +143,31 @@ barncLc <-  calcDiff(SITE1 = barnc, SITE2 = lc,
 # From the openair book, Sect. 10.4.2.  Divides into 8 sectors based on where
 # trajectories spend their time.  
 
-sectorAnal(maqs)
-sectorAnal(bss)
-sectorAnal(barnc)
-sectorAnal(lc)
-sectorAnal(cc)
-sectorAnal(ec)
-sectorAnal(nc)
-sectorAnal(bc)
-# MAQS
-# # A tibble: 9 × 3
-# sector           n percent
-# <chr>        <int>   <dbl>
-#   1 E            30158   7.36 
-# 2 N             3683   0.899
-# 3 NE            6502   1.59 
-# 4 NW           10881   2.66 
-# 5 S             4693   1.15 
-# 6 SE            5413   1.32 
-# 7 SW           30522   7.45 
-# 8 W           101586  24.8  
-# 9 unallocated 216060  52.8  
+maqsSector <- sectorAnal(maqs, DATE1,DATE2)
+bssSector <- sectorAnal(bss, DATE1,DATE2)
+barncSector <- sectorAnal(barnc, DATE1,DATE2)
+lcSector <- sectorAnal(lc, DATE1,DATE2)
+ccSector <- sectorAnal(cc, DATE1,DATE2)
+ecSector <- sectorAnal(ec, DATE1,DATE2)
+ncSector <- sectorAnal(nc, DATE1,DATE2)
+bcSector <- sectorAnal(bc, DATE1,DATE2)
 
-# Birmingham Super Site
-# A tibble: 9 × 3
-# sector           n percent
-# <chr>        <int>   <dbl>
-#   1 E            27183   6.78 
-# 2 N             3253   0.811
-# 3 NE            8838   2.20 
-# 4 NW           10512   2.62 
-# 5 S             4909   1.22 
-# 6 SE            3935   0.981
-# 7 SW           28576   7.13 
-# 8 W           100232  25.0  
-# 9 unallocated 213589  53.3  
+sectorList <- list(maqsSector, bssSector, barncSector,
+                   lcSector, ccSector, ecSector, ncSector,
+                   bcSector)
 
-# Barnstaple Center
-# A tibble: 9 × 3
-# sector           n percent
-# <chr>        <int>   <dbl>
-#   1 E            23488   5.68 
-# 2 N             3476   0.841
-# 3 NE           11719   2.83 
-# 4 NW           14735   3.56 
-# 5 S             3167   0.766
-# 6 SE            4096   0.991
-# 7 SW           27786   6.72 
-# 8 W           116881  28.3  
-# 9 unallocated 208089  50.3  
+capture.output(sectorList, file = "G:/My Drive/Experiments/DEFRA/hysplit/2019-sectorlist.csv")
 
-
-# Belfast Center
-# > sectorAnal(bc)
-# # A tibble: 9 × 3
-# sector           n percent
-# <chr>        <int>   <dbl>
-#   1 E            29816    7.19
-# 2 N             5603    1.35
-# 3 NE            6968    1.68
-# 4 NW           12500    3.01
-# 5 S             7617    1.84
-# 6 SE            6000    1.45
-# 7 SW           32656    7.87
-# 8 W           103712   25.0 
-# 9 unallocated 209962   50.6 
-
-# Cardiff Center
-# > sectorAnal(cc)
-# # A tibble: 9 × 3
-# sector           n percent
-# <chr>        <int>   <dbl>
-#   1 E            22830   5.52 
-# 2 N             3945   0.953
-# 3 NE           12795   3.09 
-# 4 NW           14324   3.46 
-# 5 S             3249   0.785
-# 6 SE            3604   0.871
-# 7 SW           29082   7.03 
-# 8 W           111888  27.0  
-# 9 unallocated 212230  51.3  
-
-# Edinburgh Center
-# > sectorAnal(ec)
-# # A tibble: 9 × 3
-# sector           n percent
-# <chr>        <int>   <dbl>
-#   1 E            32223   7.81 
-# 2 N             3431   0.832
-# 3 NE            8679   2.10 
-# 4 NW            6505   1.58 
-# 5 S             4818   1.17 
-# 6 SE            7966   1.93 
-# 7 SW           35699   8.65 
-# 8 W            96768  23.5  
-# 9 unallocated 216448  52.5  
-
-
-# Newcastle Center
-# > sectorAnal(nc)
-# # A tibble: 9 × 3
-# sector           n percent
-# <chr>        <int>   <dbl>
-#   1 E            32955    7.99
-# 2 N             5325    1.29
-# 3 NE            5602    1.36
-# 4 NW            5948    1.44
-# 5 S             4823    1.17
-# 6 SE            6666    1.62
-# 7 SW           32327    7.83
-# 8 W           108213   26.2 
-# 9 unallocated 210844   51.1 
-
-# # London Center
-# > sectorAnal(lc)
-# # A tibble: 9 × 3
-# sector           n percent
-# <chr>        <int>   <dbl>
-#   1 E            25675   6.20 
-# 2 N             7582   1.83 
-# 3 NE           10511   2.54 
-# 4 NW            9980   2.41 
-# 5 S             3648   0.882
-# 6 SE            4144   1.00 
-# 7 SW           29752   7.19 
-# 8 W           106038  25.6  
-# 9 unallocated 216481  52.3  
 
 
 
 # Cluster Analysis --------------------------------------------------------
+DATE1 <- "01/03/2024"
+DATE2 <- "31/05/2024"
+
+maqsClust <- clusterPlots(SITE = maqs, DATE1, DATE2)
+lcClust <- clusterPlots(SITE = lc, DATE1, DATE2)
+ecClust <- clusterPlots(SITE = ec, DATE1, DATE2)
+
 
 
