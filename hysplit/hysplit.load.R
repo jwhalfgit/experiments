@@ -9,7 +9,9 @@
 # if your cpu has multiple cores.  The number of cores can be set below using
 # registerDoParallel()
 
-# 
+# The code to load the hysplits as part of the script has been commented out for
+# sourcing purposes.  If you'd like to load HYSPLITs, uncomment out lines 260,
+# and 263 - 279
 
 
 library(splitr)
@@ -40,6 +42,7 @@ beep <- function(n = 3){
 
 TRAJDIR <- "G:/My Drive/Experiments/DEFRA/hysplit/trajectories"
 PLOTDIR <- file.path(TRAJDIR,"plots")
+DIFFPLOTDIR <- "G:/My Drive/Experiments/DEFRA/hysplit/differences/"
 
 YEARS2LOAD = c(2017:2024) # include all years you want loaded
 
@@ -254,25 +257,26 @@ trajectory_read_alt_Par <- function (output_folder, YEARS=YEARS2LOAD){
 
 # If the trajectories have already been loaded, formatted, and saved to an R
 # object, comment out the next line.  
-trajDF <- trajectory_read_alt_Par(TRAJDIR, YEARS = YEARS2LOAD) # this loads the data per splitr.
-# I will reformat to work with openair.
 
-trajDF_oa <- trajDF %>% 
-  rename(hour.inc = hour_along,
-         date2 = traj_dt,
-         date = traj_dt_i) %>% 
-  mutate(siteid = receptor) %>%
-  # the scatterPlot function can easily make gridded plots, but needs
-  # a categorical variable to do so.  So I will create site id
-  mutate(siteid = recode(siteid, `1` = sites$loc[1], 
-                         `2` =  sites$loc[2],
-                         `3` = sites$loc[3], 
-                         `4` = sites$loc[4], 
-                         `5` = sites$loc[5], 
-                         `6` = sites$loc[6],
-                         `7` = sites$loc[7],
-                         `8` = sites$loc[8],
-                         `9` = sites$loc[9],
-                         `10` = sites$loc[10]))
+#trajDF <- trajectory_read_alt_Par(TRAJDIR, YEARS = YEARS2LOAD) # this loads the data per splitr.
+# Now reformat to work with openair.
+
+# trajDF_oa <- trajDF %>% 
+#   rename(hour.inc = hour_along,
+#          date2 = traj_dt,
+#          date = traj_dt_i) %>% 
+#   mutate(siteid = receptor) %>%
+#   # the scatterPlot function can easily make gridded plots, but needs
+#   # a categorical variable to do so.  So I will create site id
+#   mutate(siteid = recode(siteid, `1` = sites$loc[1], 
+#                          `2` =  sites$loc[2],
+#                          `3` = sites$loc[3], 
+#                          `4` = sites$loc[4], 
+#                          `5` = sites$loc[5], 
+#                          `6` = sites$loc[6],
+#                          `7` = sites$loc[7],
+#                          `8` = sites$loc[8],
+#                          `9` = sites$loc[9],
+#                          `10` = sites$loc[10]))
 
 # save(trajDF_oa, file="G:/My Drive/Experiments/DEFRA/hysplit/trajDF_oa.Rds")
