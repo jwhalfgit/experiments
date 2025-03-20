@@ -684,9 +684,11 @@ calcDiff <- function(SITE1,SITE2 = bss,
 # SECTOR ANALYSIS
 ################################################################################
 # From the openair book, Sect. 10.4.2
-sectorAnal <- function(SITE){
+sectorAnal <- function(SITE, DATE1, DATE2){
+  site <-  selectByDate(SITE, start = DATE1,
+                        end = DATE2)
   
-  alloc <- SITE
+  alloc <- site
   
   id <- which(alloc$hour.inc == 0)
   y0 <- alloc$lat[id[1]]
@@ -725,7 +727,7 @@ sectorAnal <- function(SITE){
   
   
   # combine with trajectories
-  traj <- left_join(SITE, alloc, by = "run")
+  traj <- left_join(site, alloc, by = "run")
   
   
   group_by(traj, sector) %>%
@@ -734,3 +736,200 @@ sectorAnal <- function(SITE){
     left_join(pctTraj)
 
 }
+
+
+
+clusterPlots <-function(SITE, DATE1, DATE2){
+  site <- selectByDate(SITE, start = DATE1,
+                       end = DATE2)
+  
+  clust <- trajCluster(site,
+                       method = "Euclid",
+                       n.cluster = 6,
+                       col = "Set2",
+                       map.cols = openColours("Paired", 10))
+  
+  trajPlot(clust$data$traj, group = "cluster", col = "Set2")
+  
+  
+  
+  
+}
+
+
+# I want sourceBoxes to identify whether a lat/lon
+# resides in a box that contains
+# Northern Europe
+# Mainland Europe
+# Spain?
+# North Atlantic
+# Atlantic
+# Iceland
+#Greenland
+sourceBoxes <- function(TRAJ){
+  boxes <- rep(0,5)
+  lon <- TRAJ$lon
+  lat <- TRAJ$lat
+  
+  for(ix in 1:length(lon)){
+    # Make sure we're in the right hemisphere...
+    if(lon[ix] >= -100 & lon[ix] <= 51.5 & lat[ix] >= 0 & lat[ix] <= 80){
+      # MARINE ATLANTIC
+      if(lon[ix] >= -55 & lon[ix] < -10 & lat[ix] >= 35 & lat[ix] <= 59){
+        boxes[1] <- boxes[1] + 1
+      }else if(lon[ix] >= -75 & lon[ix] < -20 & lat[ix] >= 20 & lat[ix] <= 43){
+        boxes[1] <- boxes[1] + 1
+      }else if(lon[ix] >= -60 & lon[ix] < -55 & lat[ix] >= 40 & lat[ix] <= 71){
+        boxes[1] <- boxes[1] + 1
+      }else if(lon[ix] >= -75 & lon[ix] < -71 & lat[ix] >= 25 & lat[ix] <= 43){
+        boxes[1] <- boxes[1] + 1
+      }else if(lon[ix] >= -70 & lon[ix] < -30 & lat[ix] >= 15 & lat[ix] <= 43){
+        boxes[1] <- boxes[1] + 1
+      }else if(lon[ix] >= -60 & lon[ix] < -30 & lat[ix] >= 10 & lat[ix] <= 59){
+        boxes[1] <- boxes[1] + 1
+      }else if(lon[ix] >= -55 & lon[ix] < -15 & lat[ix] >= 5 & lat[ix] <= 59){
+        boxes[1] <- boxes[1] + 1
+      }else if(lon[ix] >= -50 & lon[ix] < -17 & lat[ix] >= 0 & lat[ix] <= 59){
+        boxes[1] <- boxes[1] + 1
+      }else if(lon[ix] >= -60 & lon[ix] < -55 & lat[ix] >= 55 & lat[ix] <= 71){
+        boxes[1] <- boxes[1] + 1
+      }else if(lon[ix] >= -65 & lon[ix] < -60 & lat[ix] >= 60 & lat[ix] <= 71){
+        boxes[1] <- boxes[1] + 1
+      }else if(lon[ix] >= -27 & lon[ix] < -10 & lat[ix] >= 29 & lat[ix] <= 41){
+        boxes[1] <- boxes[1] + 1
+      }else if(lon[ix] >= -20 & lon[ix] < -15 & lat[ix] >= 30 & lat[ix] <= 59){
+        boxes[1] <- boxes[1] + 1
+      }else if(lon[ix] >= -10 & lon[ix] < 5 & lat[ix] >= 45 & lat[ix] <= 51){
+        boxes[1] <- boxes[1] + 1
+        
+      # AMERICAN
+      }else if(lon[ix] >= -100 & lon[ix] < -80 & lat[ix] >= 0 & lat[ix] <= 80){
+        boxes[2] <- boxes[2] + 1
+      }else if(lon[ix] >= -80 & lon[ix] < -65 & lat[ix] >= 40 & lat[ix] <= 80){
+        boxes[2] <- boxes[2] + 1
+      }else if(lon[ix] >= -65 & lon[ix] < -60 & lat[ix] >= 40 & lat[ix] <= 80){
+        boxes[2] <- boxes[2] + 1
+      }else if(lon[ix] >= -60 & lon[ix] < -55 & lat[ix] >= 45 & lat[ix] <= 80){
+        boxes[2] <- boxes[2] + 1
+      }else if(lon[ix] >= -65 & lon[ix] < -60 & lat[ix] >= 65 & lat[ix] <= 80){
+        boxes[2] <- boxes[2] + 1
+      }else if(lon[ix] >= -80 & lon[ix] < -75 & lat[ix] >= 70 & lat[ix] <= 80){
+        boxes[2] <- boxes[2] + 1
+      }else if(lon[ix] >= -80 & lon[ix] < -75 & lat[ix] >= 30 & lat[ix] <= 80){
+        boxes[2] <- boxes[2] + 1
+      }else if(lon[ix] >= -80 & lon[ix] < -75 & lat[ix] >= 20 & lat[ix] <= 80){
+        boxes[2] <- boxes[2] + 1
+      }else if(lon[ix] >= -80 & lon[ix] < -70 & lat[ix] >= 15 & lat[ix] <= 80){
+        boxes[2] <- boxes[2] + 1
+      }else if(lon[ix] >= -80 & lon[ix] < -60 & lat[ix] >= 10 & lat[ix] <= 80){
+        boxes[2] <- boxes[2] + 1
+      }else if(lon[ix] >= -80 & lon[ix] < -55 & lat[ix] >= 5 & lat[ix] <= 80){
+        boxes[2] <- boxes[2] + 1
+      }else if(lon[ix] >= -80 & lon[ix] < -50 & lat[ix] >= 0 & lat[ix] <= 80){
+        boxes[2] <- boxes[2] + 1
+      
+        # AFRICAN COAST
+      }else if(lon[ix] >= -15 & lon[ix] < -5 & lat[ix] >= 30 & lat[ix] <= 37){
+        boxes[3] <- boxes[3] + 1
+      }else if(lon[ix] >= -20 & lon[ix] < -10 & lat[ix] >= 25 & lat[ix] <= 37){
+        boxes[3] <- boxes[3] + 1
+      }else if(lon[ix] >= -20 & lon[ix] < -15 & lat[ix] >= 10 & lat[ix] <= 37){
+        boxes[3] <- boxes[3] + 1
+      }else if(lon[ix] >= -15 & lon[ix] < -10 & lat[ix] >= 5 & lat[ix] <= 37){
+        boxes[3] <- boxes[3] + 1
+      }else if(lon[ix] >= -10 & lon[ix] < 10 & lat[ix] >= 0 & lat[ix] <= 37){
+        boxes[3] <- boxes[3] + 1
+      # AFRICAN
+      }else if(lon[ix] >= -5 & lon[ix] <= 55 & lat[ix] >= 5 & lat[ix] <= 37){
+        boxes[4] <- boxes[4] + 1
+      }else if(lon[ix] >= 10 & lon[ix] <= 55 & lat[ix] >= 0 & lat[ix] <= 37){
+        boxes[4] <- boxes[4] + 1
+      }else if(lon[ix] >= -10 & lon[ix] <= -5 & lat[ix] >= 5 & lat[ix] <= 37){
+        boxes[4] <- boxes[4] + 1
+      }else if(lon[ix] >= -15 & lon[ix] <= -10 & lat[ix] >= 10 & lat[ix] <= 37){
+        boxes[4] <- boxes[4] + 1
+        
+      # EUROPE
+      }else if(lon[ix] >= 10 & lon[ix] < 55 & lat[ix] >= 45 & lat[ix] <= 55){
+        boxes[5] <- boxes[5] + 1
+      }else  if(lon[ix] >= 4 & lon[ix] < 55 & lat[ix] >= 50 & lat[ix] <= 55){
+        boxes[5] <- boxes[5] + 1
+      }else if(lon[ix] >= 4 & lon[ix] < 55 & lat[ix] >= 45 & lat[ix] <= 55){
+        boxes[5] <- boxes[5] + 1
+      }else  if(lon[ix] >= -10 & lon[ix] < 7 & lat[ix] >= 45 & lat[ix] <= 50){
+        boxes[5] <- boxes[5] + 1
+        
+      # GREENLAND  
+      }else if(lon[ix] >= -73 & lon[ix] < -18 & lat[ix] >= 76 & lat[ix] <= 79){
+          boxes[6] <- boxes[6] + 1
+      }else if(lon[ix] >= -54 & lon[ix] < -40 & lat[ix] >= 59 & lat[ix] <= 66){
+        boxes[6] <- boxes[6] + 1
+      }else if(lon[ix] >= -56 & lon[ix] < -35 & lat[ix] >= 65 & lat[ix] <= 73){
+        boxes[6] <- boxes[6] + 1
+      }else if(lon[ix] >= -57 & lon[ix] < -20 & lat[ix] >= 68 & lat[ix] <= 74){
+        boxes[6] <- boxes[6] + 1
+      }else if(lon[ix] >= -40 & lon[ix] < -32 & lat[ix] >= 65 & lat[ix] <= 78){
+        boxes[6] <- boxes[6] + 1
+      }else if(lon[ix] >= -61 & lon[ix] < -17 & lat[ix] >= 74 & lat[ix] <= 76){
+        boxes[6] <- boxes[6] + 1
+      }else if(lon[ix] >= -68 & lon[ix] < -14 & lat[ix] >= 79 & lat[ix] <= 81){
+        boxes[6] <- boxes[6] + 1
+      }else if(lon[ix] >= -64 & lon[ix] < -10 & lat[ix] >= 81 & lat[ix] <= 84){
+        boxes[6] <- boxes[6] + 1
+        
+      # ICELAND  
+      }else if(lon[ix] >= -24 & lon[ix] < -13 & lat[ix] >= 63 & lat[ix] <= 67){
+        boxes[7] <- boxes[7] + 1
+      
+        # North Atlantic
+      }else if(lon[ix] >= -17 & lon[ix] < 55 & lat[ix] >= 70 & lat[ix] <= 80){
+        boxes[8] <- boxes[8] + 1
+      }else if(lon[ix] >= -13 & lon[ix] < 10 & lat[ix] >= 64 & lat[ix] <= 71){
+        boxes[8] <- boxes[8] + 1
+      }else if(lon[ix] >= -13 & lon[ix] < 5 & lat[ix] >= 60 & lat[ix] <= 71){
+        boxes[8] <- boxes[8] + 1
+      }else if(lon[ix] >= -41 & lon[ix] < -25 & lat[ix] >= 59 & lat[ix] <= 65){
+        boxes[8] <- boxes[8] + 1
+      }else if(lon[ix] >= -41 & lon[ix] < 4 & lat[ix] >= 59 & lat[ix] <= 63){
+        boxes[8] <- boxes[8] + 1
+      }else if(lon[ix] >= -25 & lon[ix] < -11 & lat[ix] >= 67 & lat[ix] <= 69){
+        boxes[8] <- boxes[8] + 1
+      }else if(lon[ix] >= -21 & lon[ix] < 1 & lat[ix] >= 67 & lat[ix] <= 69){
+        boxes[8] <- boxes[8] + 1
+      }else if(lon[ix] >= -34 & lon[ix] < -25 & lat[ix] >= 67 & lat[ix] <= 75){
+        boxes[8] <- boxes[8] + 1
+
+        # North Sea
+      }else if(lon[ix] >= -1 & lon[ix] < 8 & lat[ix] >= 55 & lat[ix] <= 58){
+        boxes[9] <- boxes[9] + 1
+      }else if(lon[ix] >= 0 & lon[ix] < 8 & lat[ix] >= 54 & lat[ix] <= 55){
+        boxes[9] <- boxes[9] + 1
+      }else if(lon[ix] >= 0 & lon[ix] < 5 & lat[ix] >= 53 & lat[ix] <= 59){
+        boxes[9] <- boxes[9] + 1
+      
+        # UK
+      }else if(lon[ix] >= -10 & lon[ix] < -5 & lat[ix] >= 51 & lat[ix] <= 55){
+        boxes[10] <- boxes[10] + 1
+      }else if(lon[ix] >= -7 & lon[ix] < -1 & lat[ix] >= 50 & lat[ix] <= 59){
+        boxes[10] <- boxes[10] + 1
+      }else if(lon[ix] >= -3 & lon[ix] < 2 & lat[ix] >= 51 & lat[ix] <= 54){
+        boxes[10] <- boxes[10] + 1
+        
+      # Northern Europe
+      }else if(lon[ix] >= 4 & lon[ix] < 20 & lat[ix] >= 55 & lat[ix] <= 64){
+        boxes[11] <- boxes[11] + 1
+      }else  if(lon[ix] >= 5 & lon[ix] < 55 & lat[ix] >= 60 & lat[ix] <= 71){
+        boxes[11] <- boxes[11] + 1
+      
+      # Southern Euroope    
+      }else if(lon[ix] >= -10 & lon[ix] < 55 & lat[ix] > 35 & lat[ix] <= 45){
+        boxes[12] <- boxes[12] + 1
+      }
+  }
+  return(boxes)
+}
+
+countBoxes <- function(){
+  
+}
+
