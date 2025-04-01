@@ -171,3 +171,90 @@ ecClust <- clusterPlots(SITE = ec, DATE1, DATE2)
 
 
 
+# Source Attribution Analysis Bar Plots
+
+DATE1 <- "01/12/2021"
+DATE2 <- "28/02/2022"
+HOURS <- 03:72
+
+maqsSource <- sourceBoxes(maqs, DATE1,DATE2,HOURS)
+bssSource <- sourceBoxes(bss, DATE1,DATE2, HOURS)
+ncSource <- sourceBoxes(nc, DATE1,DATE2, HOURS)
+ecSource <- sourceBoxes(ec, DATE1,DATE2, HOURS)
+bcSource <- sourceBoxes(bc, DATE1,DATE2, HOURS)
+ccSource <- sourceBoxes(cc, DATE1,DATE2, HOURS)
+lcSource <- sourceBoxes(lc, DATE1,DATE2, HOURS)
+barncSource <- sourceBoxes(barnc, DATE1,DATE2, HOURS)
+
+sourceOut <- t(rbind(maqsSource, bssSource,ncSource,ecSource,
+                   bcSource,ccSource,lcSource,barncSource))
+sourceOutDf <- data.frame(region = row.names(sourceOut),sourceOut,row.names = NULL) %>% 
+  pivot_longer(cols = -region,names_to = "source", values_to = "value")
+
+
+
+write.csv(sourceOut, paste0("G:/My Drive/Experiments/DEFRA/hysplit/sourceregions/",
+                            gsub("-","",dmy(DATE1)),gsub("-","",dmy(DATE2)),".csv"),
+          row.names = TRUE,quote=FALSE)
+
+ggplot(data = sourceOutDf, aes(x = region, y = value, fill = source))+
+  geom_bar(position = "dodge", stat = "identity",color = "black", linewidth = 0.5)+
+  scale_fill_brewer(palette = "Set2", labels = c("Barnstaple",
+                                                 "Belfast",
+                                                 "Birmingham",
+                                                 "Cardiff",
+                                                 "Edinburgh",
+                                                 "London",
+                                                 "Manchester",
+                                                 "Newcastle"))+
+  theme_light(base_size = 16)+
+  theme( legend.position = "bottom")+
+  labs(title = paste0(DATE1," thru ", DATE2, ", Hours ", HOURS[1],"-",
+                      HOURS[length(HOURS)]),
+       x = "Region", y= "% of trajectory endpoints",fill = "Site")+
+  scale_y_continuous(limits = c(0,81))
+
+ggsave(file = paste0("G:/My Drive/Experiments/DEFRA/hysplit/sourceregions/",
+                     gsub("-","",dmy(DATE1)),gsub("-","",dmy(DATE2)),"-",HOURS[1],"-",
+                     HOURS[length(HOURS)],".png"), width= 12.80, height = 7.68,
+       units = "in")
+
+
+
+
+# Source Attribution Analysis - TIME SERIES
+DATE1 <- "01/12/2023"
+DATE2 <- "28/02/2024"
+HOURS <- 0:72
+
+maqsSource <- sourceBoxes(maqs, DATE1,DATE2,HOURS, OUTPUT = "TS") %>% 
+  select(date,run,region,hour.inc) %>% 
+  group_by(run) %>% 
+  summarize((num = n()))
+  mutate(region = as.factor(region))
+  
+ggplot(data = maqsSource, aes(fill = region, x = date, y = hour.inc*1))+
+  geom_raster()+
+  scale_fill_manual(values = c("#0072b2", # Marine Atlantic
+                    "darksalmon", # N America
+                    "peru", # Africa
+                    "forestgreen",#Europe
+                    "azure2", #Greenland
+                    "azure4", #Iceland
+                    "darkblue", #N Atlantic
+                    "royalblue4", # N Sea
+                    "red4", # UK
+                    "springgreen4", #N Europe
+                    "olivedrab4", # S Europe
+                    "grey20"),
+                    breaks = 1:12,
+                    labels = c("Atlantic", "N America", "Africa", "Europe",
+                               "Greenland","Iceland","N Atlantic","North Sea","UK", 
+                               "N Europe","S Europe","uncategorized")) + #uncategorized
+  labs(x = "Date (UTC)", y = "Hours Backward", fill = "Region",
+       title = paste0(DATE1," thru ", DATE2, ", Hours ", HOURS[1],"-",
+                      HOURS[length(HOURS)]))
+
+
+
+
