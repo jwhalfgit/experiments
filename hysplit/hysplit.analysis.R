@@ -57,8 +57,8 @@ chilb <- trajDF_oa %>% filter(receptor == 10)
 ################################################################################
 
 
-DATE1 <- "01/03/2024"
-DATE2 <- "31/05/2024"
+DATE1 <- "05/02/2021"
+DATE2 <- "20/02/2021"
 
 maqsFreq <- plotTrajBin(DF = maqs,DATE1 = DATE1, DATE2 = DATE2)
 bssFreq <- plotTrajBin(DF = bss,DATE1 = DATE1, DATE2 = DATE2)
@@ -223,38 +223,19 @@ ggsave(file = paste0("G:/My Drive/Experiments/DEFRA/hysplit/sourceregions/",
 
 
 # Source Attribution Analysis - TIME SERIES
-DATE1 <- "01/12/2023"
-DATE2 <- "28/02/2024"
+DATE1 <- "01/01/2024"
+DATE2 <- "31/03/2024"
 HOURS <- 0:72
 
-maqsSource <- sourceBoxes(maqs, DATE1,DATE2,HOURS, OUTPUT = "TS") %>% 
-  select(date,run,region,hour.inc) %>% 
-  group_by(run) %>% 
-  summarize((num = n()))
-  mutate(region = as.factor(region))
-  
-ggplot(data = maqsSource, aes(fill = region, x = date, y = hour.inc*1))+
-  geom_raster()+
-  scale_fill_manual(values = c("#0072b2", # Marine Atlantic
-                    "darksalmon", # N America
-                    "peru", # Africa
-                    "forestgreen",#Europe
-                    "azure2", #Greenland
-                    "azure4", #Iceland
-                    "darkblue", #N Atlantic
-                    "royalblue4", # N Sea
-                    "red4", # UK
-                    "springgreen4", #N Europe
-                    "olivedrab4", # S Europe
-                    "grey20"),
-                    breaks = 1:12,
-                    labels = c("Atlantic", "N America", "Africa", "Europe",
-                               "Greenland","Iceland","N Atlantic","North Sea","UK", 
-                               "N Europe","S Europe","uncategorized")) + #uncategorized
-  labs(x = "Date (UTC)", y = "Hours Backward", fill = "Region",
-       title = paste0(DATE1," thru ", DATE2, ", Hours ", HOURS[1],"-",
-                      HOURS[length(HOURS)]))
+barncSource <- sourceBoxes(barnc, DATE1,DATE2,HOURS, OUTPUT = "TS")
+bcSource <- sourceBoxes(bc, DATE1,DATE2,HOURS, OUTPUT = "TS")
+bssSource <- sourceBoxes(bss, DATE1,DATE2,HOURS, OUTPUT = "TS")
+ccSource <- sourceBoxes(cc, DATE1,DATE2,HOURS, OUTPUT = "TS")
+ecSource <- sourceBoxes(ec, DATE1,DATE2,HOURS, OUTPUT = "TS")
+lcSource <- sourceBoxes(lc, DATE1,DATE2,HOURS, OUTPUT = "TS")
+maqsSource <- sourceBoxes(maqs, DATE1,DATE2,HOURS, OUTPUT = "TS")
+ncSource <- sourceBoxes(nc, DATE1,DATE2,HOURS, OUTPUT = "TS")
 
-
-
+grid.arrange(barncSource,bcSource,bssSource,ccSource,
+             ecSource,lcSource,maqsSource,ncSource)
 
