@@ -771,7 +771,7 @@ clusterPlots <-function(SITE, DATE1, DATE2){
 # The OUTPUT argument should be either "TS" or "BOXES"
 
 sourceBoxes <- function(SITE, DATE1, DATE2, HOURS, PCT= TRUE,
-                        OUTPUT = "TS"){
+                        OUTPUT = "TS", PLOT = TRUE){
   site <- selectByDate(SITE, start = DATE1,
                        end = DATE2)
   
@@ -1019,12 +1019,45 @@ sourceBoxes <- function(SITE, DATE1, DATE2, HOURS, PCT= TRUE,
   }
   
   # add locations to site data frame
-  sitesOut <- site %>% 
+  siteOut <- site %>% 
     mutate(region = loc) 
   
+  siteName <- sites$loc[which(sites$lat==site$lat[1]&sites$lon == site$lon[1])]
   
-  if(OUTPUT == "TS"){
-    return(sitesOut)
+  
+  if(OUTPUT == "TS" & PLOT == FALSE){
+    return(siteOut)
+  }else if(OUTPUT == "TS" & PLOT == TRUE){
+    siteOut <- siteOut %>% 
+      select(date,run,region,hour.inc) %>% 
+        group_by(run) %>% 
+        filter(n() >=70) %>% 
+        mutate(region = as.factor(region))
+    
+    sitePlot <- ggplot(data = siteOut, aes(fill = region, x = date, y = hour.inc*1))+
+      geom_raster()+
+      scale_fill_manual(values = c("#72D9FF", # Marine Atlantic
+                                   "#FF6F00", # N America
+                                   "#D7B5A6", # Africa
+                                   "#42B540",#Europe
+                                   "azure2", #Greenland
+                                   "azure4", #Iceland
+                                   "#0072b2", #N Atlantic
+                                   "#264DFF", # N Sea
+                                   "#9D7660", # UK
+                                   "springgreen4", #N Europe
+                                   "#C5E1A5", # S Europe
+                                   "grey20"),
+                        breaks = 1:12,
+                        labels = c("Atlantic", "N America", "Africa", "Europe",
+                                   "Greenland","Iceland","N Atlantic","North Sea","UK", 
+                                   "N Europe","S Europe","uncategorized")) + #uncategorized
+      labs(x = "Date (UTC)", y = "Hours Backward", fill = "Region",
+           title = paste0(siteName," ", DATE1," thru ", DATE2, ", Hours ", HOURS[1],"-",
+                          HOURS[length(HOURS)]))+
+      theme_minimal()
+    return(sitePlot)
+    
   }else if(OUTPUT == "BOXES"){
       return(boxes)
   }else{
