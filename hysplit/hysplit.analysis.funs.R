@@ -770,7 +770,7 @@ clusterPlots <-function(SITE, DATE1, DATE2){
 
 # The OUTPUT argument should be either "TS" or "BOXES"
 
-sourceBoxes <- function(SITE, DATE1, DATE2, HOURS, PCT= TRUE,
+sourceBoxes <- function(SITE, DATE1, DATE2, HOURS = 0:72, PCT= TRUE,
                         OUTPUT = "TS", PLOT = TRUE){
   site <- selectByDate(SITE, start = DATE1,
                        end = DATE2)
@@ -1068,4 +1068,34 @@ sourceBoxes <- function(SITE, DATE1, DATE2, HOURS, PCT= TRUE,
   
 }
 
+
+# plotEq will be a function to overlay the equivalence time series measurements
+# with my stacked bar / raster plot.  Because ggplot2 is terrible, I'm sure this
+# code will be a mess.
+plotEq <- function(EQUIVDF, SITE,HOURS = 0:72){
+  DATE1 = EQUIVDF$ts[1]
+  DATE2 = EQUIVDF$ts[nrow(EQUIVDF)]
+  
+  site <- SITE %>% 
+    filter(between(date, DATE1, DATE2))
+  
+  # Generic eqn to rescale data:
+  # ((x - old_min) * (new_max - new_min)) / (old_max - old_min) + new_min
+  
+  equivDFMorph <- EQUIVDF %>% 
+    mutate(deltaMorph = (delta-min(delta))*(max(-1*HOURS)-min(-1*HOURS))/(max(delta)-min(delta))+ min(HOURS*-1))
+  
+  sourceBoxes(SITE,DATE1,DATE2,HOURS)+
+    geom_line(data= equivDFMorph, aes(x = ts, y = deltaMorph),
+              inherit.aes = FALSE)+
+    scale_y_continuous(limits = c(max(HOURS)*-1,min(HOURS)*-1),
+                       sec.axis = sec_axis(transform=(~(.-(max(HOURS)*-1))*(max(EQUIVDF$delta)-min(EQUIVDF$delta))/((min(HOURS)*-1)-(max(HOURS)*-1))+ min(EQUIVDF$delta)),name = "Ref-Candidate (ug/m3)"))+
+                       
+    theme_minimal()
+  
+  
+  
+  
+  
+}
   
