@@ -1055,7 +1055,13 @@ sourceBoxes <- function(SITE, DATE1, DATE2, HOURS = 0:72, PCT= TRUE,
       labs(x = "Date (UTC)", y = "Hours Backward", fill = "Region",
            title = paste0(siteName," ", DATE1," thru ", DATE2, ", Hours ", HOURS[1],"-",
                           HOURS[length(HOURS)]))+
-      theme_minimal()
+      theme_minimal()+
+      theme(panel.grid.major.y = element_line(color = "darkgray",
+                                                    size = 0.5,
+                                                    linetype = 2)
+            
+            
+      )
     return(sitePlot)
     
   }else if(OUTPUT == "BOXES"){
@@ -1072,30 +1078,57 @@ sourceBoxes <- function(SITE, DATE1, DATE2, HOURS = 0:72, PCT= TRUE,
 # plotEq will be a function to overlay the equivalence time series measurements
 # with my stacked bar / raster plot.  Because ggplot2 is terrible, I'm sure this
 # code will be a mess.
-plotEq <- function(EQUIVDF, SITE,HOURS = 0:72){
-  DATE1 = EQUIVDF$ts[1]
-  DATE2 = EQUIVDF$ts[nrow(EQUIVDF)]
+
+# EQUIVDF is referencing the data frames for which we have Reference / Candidate method
+# PM data (notated as siteEq (e.g., maqsEq)) in hysplit.analysis.R
+# SITE is referencing the hysplit dataframes (e.g., maqs)
+
+# If you leave DATE1 and DATE2 as NULL, the function will automatically pull the
+# date range that is present in EQUIVDF (ie, the timespan for which we have)
+# PM2.5 measurements.
+plotEq <- function(EQUIVDF, SITE,HOURS = 0:72,DATE1 = NULL,DATE2 = NULL){
+  
+  if(is.null(DATE1) & is.null(DATE2)){
+    DATE1 = EQUIVDF$ts[1]
+    DATE2 = EQUIVDF$ts[nrow(EQUIVDF)]
+  }else{
+    DATE1 = ymd(DATE1)
+    DATE2 = ymd(DATE2)
+  }
   
   site <- SITE %>% 
     filter(between(date, DATE1, DATE2))
   
+  
+  equivDF <- EQUIVDF %>% 
+    filter(between(ts, DATE1, DATE2))
+  
   # Generic eqn to rescale data:
   # ((x - old_min) * (new_max - new_min)) / (old_max - old_min) + new_min
   
-  equivDFMorph <- EQUIVDF %>% 
+  equivDFMorph <- equivDF %>% 
     mutate(deltaMorph = (delta-min(delta))*(max(-1*HOURS)-min(-1*HOURS))/(max(delta)-min(delta))+ min(HOURS*-1))
   
-  sourceBoxes(SITE,DATE1,DATE2,HOURS)+
+  outPlot <- sourceBoxes(SITE,DATE1,DATE2,HOURS)+
     geom_line(data= equivDFMorph, aes(x = ts, y = deltaMorph),
-              inherit.aes = FALSE)+
+              inherit.aes = FALSE, lwd = 1.5, color = "red")+
     scale_y_continuous(limits = c(max(HOURS)*-1,min(HOURS)*-1),
                        sec.axis = sec_axis(transform=(~(.-(max(HOURS)*-1))*(max(EQUIVDF$delta)-min(EQUIVDF$delta))/((min(HOURS)*-1)-(max(HOURS)*-1))+ min(EQUIVDF$delta)),name = "Ref-Candidate (ug/m3)"))+
                        
-    theme_minimal()
+    theme_minimal()+
+    theme(panel.grid.major.y = element_line(color = "red",
+                                            size = 0.5,
+                                            linetype = 2))
   
   
   
+  ggsave(paste0("G:/My Drive/Experiments/DEFRA/hysplit/sourceregions/",
+                gsub("-","",DATE1),gsub("-","",DATE2),"-",HOURS[1],"-",
+                HOURS[length(HOURS)],deparse(substitute(EQUIVDF)),"-ts.png"),
+         width= 19.20, height = 10.8,
+         units = "in", bg = "white")
   
+  return(outPlot)
   
 }
   
