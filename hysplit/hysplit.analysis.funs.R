@@ -1026,7 +1026,34 @@ sourceBoxes <- function(SITE, DATE1, DATE2, HOURS = 0:72, PCT= TRUE,
   
   
   if(OUTPUT == "TS" & PLOT == FALSE){
+    siteOut <- siteOut %>% 
+      filter(hour.inc!=0) %>% 
+      group_by(date) %>%
+      mutate(count = length(region)) %>%
+      count(region) %>% 
+      mutate(pct = n / sum(n) * 100) %>% 
+      
+      pivot_wider(id_cols = date, names_from = region,
+                  values_from = pct, names_prefix = "loc_",
+                  values_fill = 0) %>% 
+      # if_else("loc_2" %in% names(.),
+      #         mutate(loc_2 = loc_2), 
+      #         mutate(loc_2 =  0)) %>% 
+      ungroup() %>% 
+      mutate(loc_2 = ifelse("loc_2" %in% names(.), 
+                             loc_2,
+                              0),
+             loc_3 = ifelse("loc_3" %in% names(.), 
+                            loc_3,
+                            0),)
+
+        
+    
+     
+    
+    
     return(siteOut)
+    
   }else if(OUTPUT == "TS" & PLOT == TRUE){
     siteOut <- siteOut %>% 
       select(date,run,region,hour.inc) %>% 
@@ -1074,7 +1101,9 @@ sourceBoxes <- function(SITE, DATE1, DATE2, HOURS = 0:72, PCT= TRUE,
   
 }
 
-
+region.names <- c("Atlantic", "N America", "Africa", "Europe",
+                  "Greenland","Iceland","N Atlantic","North Sea","UK", 
+                  "N Europe","S Europe","uncategorized")
 # plotEq will be a function to overlay the equivalence time series measurements
 # with my stacked bar / raster plot.  Because ggplot2 is terrible, I'm sure this
 # code will be a mess.
@@ -1086,7 +1115,7 @@ sourceBoxes <- function(SITE, DATE1, DATE2, HOURS = 0:72, PCT= TRUE,
 # If you leave DATE1 and DATE2 as NULL, the function will automatically pull the
 # date range that is present in EQUIVDF (ie, the timespan for which we have)
 # PM2.5 measurements.
-plotEq <- function(EQUIVDF, SITE,HOURS = 0:72,DATE1 = NULL,DATE2 = NULL){
+plotEq <- function(EQUIVDF, SITE,HOURS = 0:72,DATE1 = NULL,DATE2 = NULL, PLOT = TRUE){
   
   if(is.null(DATE1) & is.null(DATE2)){
     DATE1 = EQUIVDF$ts[1]
@@ -1111,7 +1140,7 @@ plotEq <- function(EQUIVDF, SITE,HOURS = 0:72,DATE1 = NULL,DATE2 = NULL){
   
   outPlot <- sourceBoxes(SITE,DATE1,DATE2,HOURS)+
     geom_line(data= equivDFMorph, aes(x = ts, y = deltaMorph),
-              inherit.aes = FALSE, lwd = 1.5, color = "red")+
+              inherit.aes = FALSE, lwd = 1.25, color = "red")+
     scale_y_continuous(limits = c(max(HOURS)*-1,min(HOURS)*-1),
                        sec.axis = sec_axis(transform=(~(.-(max(HOURS)*-1))*(max(EQUIVDF$delta)-min(EQUIVDF$delta))/((min(HOURS)*-1)-(max(HOURS)*-1))+ min(EQUIVDF$delta)),name = "Ref-Candidate (ug/m3)"))+
                        
@@ -1128,7 +1157,15 @@ plotEq <- function(EQUIVDF, SITE,HOURS = 0:72,DATE1 = NULL,DATE2 = NULL){
          width= 19.20, height = 10.8,
          units = "in", bg = "white")
   
-  return(outPlot)
+  if(PLOT == TRUE){
+    return(outPlot)
+  }else{
+    outDF <- sourceBoxes(SITE,DATE1,DATE2, HOURS, PLOT = FALSE) %>% 
+      select(date,region) %>% 
+      group_by(date,region) %>% 
+      tally()
+      
+  }
   
 }
   
