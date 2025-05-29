@@ -27,6 +27,7 @@ library(foreach)
 library(foreach)
 library(doParallel)
 registerDoParallel(cores= 4)
+library(patchwork) # To display 2 charts together
 
 # if the trajectories have been loaded and saved to a local object already,
 # uncomment this line.
@@ -44,7 +45,7 @@ TRAJDIR <- "G:/My Drive/Experiments/DEFRA/hysplit/trajectories"
 PLOTDIR <- file.path(TRAJDIR,"plots")
 DIFFPLOTDIR <- "G:/My Drive/Experiments/DEFRA/hysplit/differences/"
 
-YEARS2LOAD = c(2017:2024) # include all years you want loaded
+YEARS2LOAD = c(2015:2024) # include all years you want loaded
 
 sites <- as.data.frame(matrix(data = c(53.44,-2.21,"Manchester Air Quality Site",
                                        52.45, -1.93, "Birmingham Super Site",
@@ -55,7 +56,9 @@ sites <- as.data.frame(matrix(data = c(53.44,-2.21,"Manchester Air Quality Site"
                                        51.45, -0.04,  "London Super Site",
                                        51.08, -4.10, "Barnstaple Center",
                                        55.79, -3.24, "Auchencorth Moss",
-                                       51.15, -1.44, "Chilbolton Observatory"),
+                                       51.15, -1.44, "Chilbolton Observatory",
+                                       52.61, 1.30, "Norwich Center",
+                                       53.75, -0.34, "Hull Center"),
                               ncol=3,byrow=TRUE,dimnames = list(c(),c("lat","lon","loc"))))
 
 sites$lat <- as.numeric(sites$lat)
@@ -261,22 +264,24 @@ trajectory_read_alt_Par <- function (output_folder, YEARS=YEARS2LOAD){
 #trajDF <- trajectory_read_alt_Par(TRAJDIR, YEARS = YEARS2LOAD) # this loads the data per splitr.
 # Now reformat to work with openair.
 
-# trajDF_oa <- trajDF %>% 
+# trajDF_oa <- trajDF %>%
 #   rename(hour.inc = hour_along,
 #          date2 = traj_dt,
-#          date = traj_dt_i) %>% 
+#          date = traj_dt_i) %>%
 #   mutate(siteid = receptor) %>%
 #   # the scatterPlot function can easily make gridded plots, but needs
 #   # a categorical variable to do so.  So I will create site id
-#   mutate(siteid = recode(siteid, `1` = sites$loc[1], 
+#   mutate(siteid = recode(siteid, `1` = sites$loc[1],
 #                          `2` =  sites$loc[2],
-#                          `3` = sites$loc[3], 
-#                          `4` = sites$loc[4], 
-#                          `5` = sites$loc[5], 
+#                          `3` = sites$loc[3],
+#                          `4` = sites$loc[4],
+#                          `5` = sites$loc[5],
 #                          `6` = sites$loc[6],
 #                          `7` = sites$loc[7],
 #                          `8` = sites$loc[8],
 #                          `9` = sites$loc[9],
-#                          `10` = sites$loc[10]))
+#                          `10` = sites$loc[10],
+#                          `11` = sites$loc[11],
+#                          `12` = sites$loc[12]))
 
-# save(trajDF_oa, file="G:/My Drive/Experiments/DEFRA/hysplit/trajDF_oa.Rds")
+#save(trajDF_oa, file="G:/My Drive/Experiments/DEFRA/hysplit/trajDF_oa.Rds")
