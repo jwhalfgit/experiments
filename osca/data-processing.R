@@ -493,9 +493,6 @@ calListFlatTs <- as.numeric(calListFlatFilter$ts) - as.numeric(calListFlatFilter
 #
 # Summer OSCA
 # Good data start around 2021-06-10 17:00.  
-# load.tildas.data(START = "2021-06-17", STOP = "2021-06-24",STC=TRUE)
-# load.tildas.data(START = "2021-06-21", STOP = "2021-07-02",STC=TRUE, 
-#                  output.type="tibble", MASK = FALSE, STCALL = TRUE)
 load.tildas.data(START = "2021-06-10", STOP = "2021-07-21",STC=TRUE,
                  output.type = "tibble", MASK = FALSE,STCALL = FALSE)
 
@@ -854,7 +851,7 @@ P2 <- dfAnalCorrChi %>%
   
   ggplot(aes(x=ts,y=hcl)) +
   geom_line()+
-  scale_y_continuous(limits = c(-0.2,0.5),name = "HCl")
+  scale_y_continuous(limits = c(-0.1,0.3),name = "HCl")
 
 # P2 <- dfAnalNoFilter %>% 
 #   filter(between(ts, ymd_hms(TIME1), ymd_hms(TIME2))) %>% 
