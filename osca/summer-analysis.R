@@ -12,6 +12,25 @@ timespan <- data.frame(date = seq(as.POSIXct("2021-06-10"),
 tildas <- read_csv(file.path(OSCADATADIR,"2021", "tildas.csv")) %>% 
   rename(date = ts) %>% 
   mutate(hcl = hcl) # ocnvert to ppbv for CIMS consistency
+
+kdep <- read_csv(file.path(OSCADATADIR,"2021", "kdep.csv")) %>% 
+  rename(date = ts)
+
+
+#marga comes as all units in ug / m3.  Ready to go for ISORROPIA
+marga <- read_csv(file.path(OSCADATADIR, "2021","marga.csv")) %>% 
+  select(!contains("Status")) %>% 
+  rename(pm10ca = `calcium in PM10`, pm10cl = `chloride in PM10`,
+         pm10k = `potassium in PM10`, pm10nh4 = `ammonium in PM10`,
+         pm10no3 = `nitrate in PM10`, pm10so4 = `sulphate in PM10`,
+         pm25ca = `calcium in PM2.5`, pm25cl = `chloride in PM2.5`,
+         pm25k = `potassium in PM2.5`, pm25nh4 = `ammonium in PM2.5`,
+         pm25no3 = `nitrate in PM2.5`, pm25so4 = `sulphate in PM2.5`,
+         hcl = `gaseous hydrochloric acid`, hno2 = `gaseous nitrous acid`,
+         hno3 = `gaseous nitric acid`, nh3 = `gaseous ammonia`,
+         so2 = `gaseous sulphur dioxide`)
+marga[,2:ncol(marga)] <- sapply(marga[,2:ncol(marga)],as.numeric) 
+  
   
 
 clno2 <- read_csv(file.path(OSCADATADIR,"2021", "cims60sAvg.csv")) %>% 
@@ -19,10 +38,15 @@ clno2 <- read_csv(file.path(OSCADATADIR,"2021", "cims60sAvg.csv")) %>%
   select(!contains(c("N2O5", "Cl2"))) %>% 
   mutate(across(!date, ~.x/1000))
 
+co <- read_csv(file.path(OSCADATADIR,"2021", "co.csv")) %>% 
+  rename(date = datetime, ch4 = "CH4 (ppm)",
+         co = `CO (ppb)`) %>% 
+  select(!contains("qc_Flag")) %>% 
+  select(date, co, ch4) 
 
   
-# specrad <-read_csv(file.path(OSCADATADIR,"2021", "specrad.csv")) %>% 
-#   rename(date = datetime) %>% 
+# specrad <-read_csv(file.path(OSCADATADIR,"2021", "specrad.csv")) %>%
+#   rename(date = datetime) %>%
 #   mutate(date = dmy_hms(date) )
 
 no2 <- read_csv(file.path(OSCADATADIR,"2021","no2.csv")) %>% 
@@ -39,7 +63,23 @@ n2o5_cl2 <- read_csv(file.path(OSCADATADIR,"2021", "cims-n2o5-cl2.csv")) %>%
 o3 <- read_csv(file.path(OSCADATADIR,"2021", "o3.csv")) %>% 
   rename(date = datetime, o3 = "Ozone (ppb)") %>% 
   select(!contains("qc"))
+
+
+
+oh <- read_csv(file.path(OSCADATADIR,"2021", "oh.csv")) %>% 
+  mutate(date = dmy_hm(date))
   
+
+
+hcho <- read_csv(file.path(OSCADATADIR,"2021", "hcho.csv")) %>% 
+  mutate(date = dmy_hms(date)) %>% 
+  select(date,hcho)
+
+ho2 <- read.csv(file.path(OSCADATADIR,"2021", "ho2.csv"),stringsAsFactors = FALSE) %>% 
+  mutate(date = dmy_hm(date)) %>% 
+  na.omit(.)
+  
+
 
 so2 <- read_csv(file.path(OSCADATADIR,"2021", "noy_so2_yrk.csv")) %>% 
   select(date, contains("so2")) %>% 
@@ -59,14 +99,17 @@ voc <- read_csv(file.path(OSCADATADIR,"2021", "gc.csv")) %>%
   mutate(date = as.POSIXct(date, origin="1970-01-01", tz = "UTC"))
                 
                 
-#                approx(~.x, n = n())$y))
+
+
 
 
 # This is the estimated BL height in m
 pblh <- read_csv(file.path(OSCADATADIR,"2021","maqs.csv")) %>% 
-  select(ts, "Estimated.Boundary.Layer.Height..m.","JO1D..s.1.","JNO2..s.1.") %>% 
+  select(ts, "Estimated.Boundary.Layer.Height..m.","JO1D..s.1.","JNO2..s.1.","Solar.Radiation..W.m2.") %>% 
   rename(date = ts, pblh_m = "Estimated.Boundary.Layer.Height..m.",
-         jo1d= "JO1D..s.1.", jno2 = "JNO2..s.1.")
+         jo1d= "JO1D..s.1.", jno2 = "JNO2..s.1.",srad = "Solar.Radiation..W.m2.")
+pblh$pblh_m[pblh$pblh_m == -9999 | pblh$pblh_m == -8888] <- NA
+
 
 met <- read_csv(file.path(OSCADATADIR,"2021", "fidas-met.csv")) %>% 
   mutate(datetime = dmy_hm(datetime)) %>% 
@@ -82,13 +125,15 @@ acsm <- read_csv(file.path(OSCADATADIR,"2021", "acsm.csv")) %>%
   select(!contains("qc_Flag"))
 
 xact2_5 <- read_csv(file.path(OSCADATADIR,"2021", "xact2_5.csv")) %>% 
-  mutate(datetime = ymd_hms(datetime)) %>% 
+  mutate(datetime = dmy_hm(datetime)) %>% 
   #select(c(datetime,contains("Cl"))) %>%
   select(!contains("flag")) %>% 
   select(!contains("Uncert")) %>% 
-  rename(date = datetime)
-  #rename(date = datetime, pcl_2_5 = "PM2.5_Cl 17 (ug/m3)",
-  #       pcl_2_5_unc = "PM2.5_Cl Uncert (ug/m3)") 
+  rename(date = datetime, pcl_2_5 = "PM2.5_Cl 17 (ug/m3)",
+         #pcl_2_5_unc = "PM2.5_Cl Uncert (ug/m3)",
+         pk_2_5 = "PM2.5_K 19 (ug/m3)") %>% 
+         #pk_2_5_unc = "PM2.5_K Uncert (ug/m3)") 
+  mutate(pcl_2_5 = pcl_2_5 / 35.45, pk_2_5 = pk_2_5 / 39.098)
 
 
 xact10 <- read_csv(file.path(OSCADATADIR,"2021", "xact10.csv")) %>% 
@@ -96,22 +141,49 @@ xact10 <- read_csv(file.path(OSCADATADIR,"2021", "xact10.csv")) %>%
   #select(c(datetime,contains("Cl"))) %>% 
   select(!contains("flag")) %>% 
   select(!contains("Uncert")) %>% 
-  
-  rename(date = datetime)
-  #rename(date = datetime, pcl_10 = "PM10_Cl 17 (ug/m3)",
-  #       pcl_10_unc = "PM10_Cl Uncert (ug/m3)")
+  rename(date = datetime, pcl_10 = "PM10_Cl 17 (ug/m3)",
+        pk_10 = "PM10_K 19 (ug/m3)") %>% 
+  mutate(pcl_10 = pcl_10 / 35.45, pk_10 = pk_10 / 39.098)
 
-smps <- read_csv(file.path(OSCADATADIR,"2021", "smps.csv")) %>% 
+
+
+# I will use the SMPS data to calculate HCl uptake to particulates
+# based on the particle surface area
+# Unlike the smps data, the FIDAS data is already in units of 
+# number concentration.  
+# fidas <- read_csv(file.path(OSCADATADIR, "2021", "fidas-conc.csv")) %>% 
+#   mutate(date = ymd_hms(datetime)) %>% 
+#   filter(between(date, ymd_hm("2021-06-10 00:00"),ymd_hm("2021-07-21 00:00"))) %>% 
+#   mutate(date = floor_date(date,unit = "hours")) %>% 
+#   select(!datetime) %>% 
+#   group_by(date) %>% 
+#   summarize_all(mean, na.rm = TRUE)
+# 
+# 
+
+# The smps output gives dN / dlogDp data, which means that the actual
+# number concentration for these data need to be divided by the bin
+# width, which is 64.
+
+smps <- read_csv(file.path(OSCADATADIR, "2021", "smps.csv")) %>% 
   mutate(datetime = dmy_hm(datetime)) %>% 
-  rename(date = datetime)
+  rename(ts = datetime) %>% 
+  filter(between(ts, ymd_hm("2021-06-10 00:00"),ymd_hm("2021-07-21 00:00"))) %>% 
+  mutate(ts = floor_date(ts,unit = "hours")) %>% 
+  group_by(ts) %>% 
+  summarize_all(mean, na.rm = TRUE)
+smps[,2:107] <- smps[,2:107]/64 # the bin size in the SMPS is 1/64
+
 
 
 dfMaster <- tildas %>% 
+  full_join(kdep) %>% 
   full_join(clno2) %>% 
   full_join(no2) %>% 
   full_join(nonoy) %>% 
   full_join(n2o5_cl2) %>% 
   full_join(o3) %>% 
+  full_join(co) %>% 
   full_join(so2) %>% 
   full_join(voc) %>% 
   full_join(pblh) %>% 
@@ -119,11 +191,23 @@ dfMaster <- tildas %>%
   full_join(acsm) %>% 
   full_join(xact2_5) %>% 
   full_join(xact10) %>% 
-  full_join(smps) %>% 
+  full_join(oh) %>% 
+  full_join(hcho) %>% 
+  full_join(ho2) %>% 
+  #full_join(smps) %>% 
   arrange(date) %>% 
   select(!contains("Diff")) %>% 
-  select(!contains("qc"))
+  select(!contains("qc")) %>% 
+  mutate(nDensAir = press*100 * 6.022e23/8.314/tempK) %>% # molecules/m3
+  #mutate(hcl_ug_m3 = hcl*10^-9 * nDensAir /6.02e23*(35.45+1.008)*10^6) %>% 
+  #mutate(hcl_umol_m3 = hcl*10^-9 * nDensAir /6.02e23*10^6) %>% 
+  mutate(oh = oh /nDensAir * 10^9 * 1e6,
+         ho2 = ho2 / nDensAir * 10^9 * 1e6,
+         hcho = hcho / nDensAir * 10^9 * 1e6,
+         pcl_1_ppb = pcl_1 / 35.45/nDensAir *6.02e23*1000 ) 
+
   
+dfMaster[dfMaster==-9999] <- NA
   
   
 dfMasterOut <- dfMaster %>%
@@ -131,6 +215,8 @@ dfMasterOut <- dfMaster %>%
   mutate(date = floor_date(date,"10 min")) %>% 
   group_by(date) %>% 
   summarise_all(mean,na.rm=TRUE)
+
+
   
 write_csv(dfMasterOut, file.path(OSCADATADIR, "2021", "dfMaster.csv"))
 
@@ -161,6 +247,7 @@ write_csv(dfDiurnalOut, file.path(OSCADATADIR, "2021", "dfMasterDiurnal.csv"))
 justMeans <- dfDiurnalOut %>% 
   select(hour,contains("Mean"))
 names(justMeans) <- gsub("Mean_","",names(justMeans))
+justMeans$oh[justMeans$oh <0] = 0# F0AM needs positive values
 
 write_csv(justMeans, file.path(OSCADATADIR, "2021", "dfMasterDiurnal_justmeans.csv"))
 
@@ -246,11 +333,11 @@ xact2_5Avg <- timeAvg(xact2_5, "1 hour")
 xact10Avg <- timeAvg(xact10, "1 hour")
 metAvg <- timeAvg(met, "1 hour")
 vocAvg <- timeAvg(voc, "1 hour")
-specAvg <- timeAvg(specrad,"1 hour")
+#specAvg <- timeAvg(specrad,"1 hour")
 
-dfMaster<- tildasAvg %>% 
-  left_join(clno2Avg) %>% 
-  left_join(n2o5_cl2Avg) %>% 
+dfMaster2<- tildasAvg %>% 
+#  left_join(clno2Avg) %>% 
+#  left_join(n2o5_cl2Avg) %>% 
   left_join(acsmAvg) %>% 
   left_join(xact2_5Avg) %>% 
   mutate(pcl_2_5 = na.approx(pcl_2_5)) %>% 
@@ -263,26 +350,46 @@ dfMaster<- tildasAvg %>%
   left_join(metAvg) %>% 
   mutate(nDensAir = press*100 * 6.022e23/8.314/tempK) %>% 
   mutate(hcl_ug_m3 = hcl*10^-12 * nDensAir /6.02e23*(35.45+1.008)*10^6) %>% 
-  mutate(cl_hcl_ug_m3 = hcl*10^-12 * nDensAir /6.02e23*(35.45)*10^6) %>% 
-  mutate(clno2_ug_m3 = ClNO2_ppt*10^-12 * nDensAir /6.02e23*(35.45+14.01+16*2)*10^6) %>%
-  mutate(cl_clno2_ug_m3 = ClNO2_ppt*10^-12 * nDensAir /6.02e23*(35.45)*10^6) %>% 
-  mutate(cl2_ug_m3 = Cl2_ppt*10^-12 * nDensAir /6.02e23*(35.45*2)*10^6) %>% 
-  mutate(cl_cl2_ug_m3 = Cl2_ppt*10^-12 *2* nDensAir /6.02e23*(35.45)*10^6) %>% 
-  mutate(cl_sum = rowSums(select(., cl_hcl_ug_m3, cl_cl2_ug_m3,cl_clno2_ug_m3,
-                                 pcl_1, pcl_2_5,pcl_10))) %>% 
-  mutate(hcl_pct = cl_hcl_ug_m3 / cl_sum *100) %>% 
-  mutate(cl2_pct = cl_cl2_ug_m3 / cl_sum *100) %>% 
-  mutate(clno2_pct = cl_clno2_ug_m3 / cl_sum *100) %>% 
-  mutate(pcl1_pct = pcl_1 / cl_sum *100) %>% 
-  mutate(pcl2.5_pct = pcl_2_5 / cl_sum *100) %>% 
-  mutate(pcl10_pct = pcl_10 / cl_sum *100) %>% 
-  add_row(date = ymd_hms("2021-06-18 18:00:00")) %>% 
-  add_row(date = ymd_hms("2021-06-23 09:00:00")) %>% 
-  add_row(date = ymd_hms("2021-06-29 14:00:00")) %>% 
-  arrange(date)
-  
-write.csv(dfMaster, "G:/My Drive/Experiments/OSCA/data/2021/dfMaster-1hr-completecases.csv",
+  mutate(cl_hcl_ug_m3 = hcl*10^-12 * nDensAir /6.02e23*(35.45)*10^6)  %>% 
+  mutate(hcl_mol_m3 = hcl_ug_m3 / (35.45+1.008)) %>% 
+  filter(between(date,ymd("2021-06-11"),ymd("2021-06-18")))
+  # mutate(clno2_ug_m3 = ClNO2_ppt*10^-12 * nDensAir /6.02e23*(35.45+14.01+16*2)*10^6) %>%
+  # mutate(cl_clno2_ug_m3 = ClNO2_ppt*10^-12 * nDensAir /6.02e23*(35.45)*10^6) %>% 
+  # mutate(cl2_ug_m3 = Cl2_ppt*10^-12 * nDensAir /6.02e23*(35.45*2)*10^6) %>% 
+  # mutate(cl_cl2_ug_m3 = Cl2_ppt*10^-12 *2* nDensAir /6.02e23*(35.45)*10^6) %>% 
+  # mutate(cl_sum = rowSums(select(., cl_hcl_ug_m3, cl_cl2_ug_m3,cl_clno2_ug_m3,
+  #                                pcl_1, pcl_2_5,pcl_10))) %>% 
+  # mutate(hcl_pct = cl_hcl_ug_m3 / cl_sum *100) %>% 
+  # mutate(cl2_pct = cl_cl2_ug_m3 / cl_sum *100) %>% 
+  # mutate(clno2_pct = cl_clno2_ug_m3 / cl_sum *100) %>% 
+  # mutate(pcl1_pct = pcl_1 / cl_sum *100) %>% 
+  # mutate(pcl2.5_pct = pcl_2_5 / cl_sum *100) %>% 
+  # mutate(pcl10_pct = pcl_10 / cl_sum *100) %>% 
+  # add_row(date = ymd_hms("2021-06-18 18:00:00")) %>% 
+  # add_row(date = ymd_hms("2021-06-23 09:00:00")) %>% 
+  # add_row(date = ymd_hms("2021-06-29 14:00:00")) %>% 
+  # arrange(date)
+  # 
+
+
+dfDiurnal_hclmol<- timeVariation(dfMaster2,
+                          pollutant = "hcl_mol_m3",plot = FALSE)$data$hour %>% 
+  mutate(Upper = Upper - Mean) %>% 
+  mutate(Lower = Mean - Lower) 
+
+
+dfDiurnalOut <- dfDiurnal %>%  
+  group_by(variable) %>% 
+  select(!c("default","ci")) %>% 
+  arrange(variable) %>%
+  pivot_wider(names_from=variable,values_from = c(Mean, Lower, Upper))
+
+
+
+write.csv(dfMaster, "G:/My Drive/Experiments/OSCA/data/2021/dfhcl_ugm3.csv",
           quote = FALSE, row.names= FALSE)
+
+
 
 test <- dfMaster %>% 
   select(!c(date, pcl_2_5_unc, pcl_10_unc, tempC, n_met, nDensAir,cl_sum)) %>% 
