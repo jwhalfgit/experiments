@@ -2,21 +2,41 @@
 # Load files ----------------------------------------------------------------
 
 library(openair)
-library(ncdf4)
+#library(ncdf4)
 library(lubridate)
 OSCADATADIR <- file.path(EXPTDIR, "OSCA","data")
 
 tildas <- read_csv(file.path(OSCADATADIR,"2022", "tildas.csv")) %>% 
   rename(date = ts) %>% 
-  mutate(hcl = hcl*1000) # ocnvert to pptv for CIMS consistency
+  mutate(hcl = hcl) # ocnvert to pptv for CIMS consistency
+
+kdep <- read_csv(file.path(OSCADATADIR,"2022", "kdep.csv")) %>% 
+  rename(date = ts)
+
+
+# marga is in ug/m3
+marga <- read_csv(file.path(OSCADATADIR, "2022","marga.csv")) %>% 
+  select(!contains("Status")) %>% 
+  rename(pm10ca = `calcium in PM10`, pm10cl = `chloride in PM10`,
+         pm10k = `potassium in PM10`, pm10nh4 = `ammonium in PM10`,
+         pm10no3 = `nitrate in PM10`, pm10so4 = `sulphate in PM10`,
+         pm25ca = `calcium in PM2.5`, pm25cl = `chloride in PM2.5`,
+         pm25k = `potassium in PM2.5`, pm25nh4 = `ammonium in PM2.5`,
+         pm25no3 = `nitrate in PM2.5`, pm25so4 = `sulphate in PM2.5`,
+         hcl = `gaseous hydrochloric acid`, hno2 = `gaseous nitrous acid`,
+         hno3 = `gaseous nitric acid`, nh3 = `gaseous ammonia`,
+         so2 = `gaseous sulphur dioxide`)
+marga[,2:ncol(marga)] <- sapply(marga[,2:ncol(marga)],as.numeric) 
 
 clno2 <- read_csv(file.path(OSCADATADIR,"2022", "cims60sAvg.csv")) %>% 
-  rename(date = ts)%>% 
-  select(!contains(c("N2O5", "Cl2")))
+  rename(date = ts, clno2 = ClNO2_ppt)%>% 
+  select(!contains(c("N2O5", "Cl2"))) %>% 
+  mutate(clno2 = clno2 / 1000)
 
 n2o5_cl2 <- read_csv(file.path(OSCADATADIR,"2022", "cims-n2o5-cl2.csv")) %>% 
-  rename(date = ts) %>% 
-  select(!contains("HCN"))
+  rename(date = ts, cl2 = Cl2_ppt, n2o5 = N2O5_ppt) %>% 
+  select(!contains("HCN")) %>% 
+  mutate(cl2 = cl2 / 1000, n2o5 = n2o5 / 1000)
 
 
 no2 <- read_csv(file.path(OSCADATADIR,"2022","no2.csv")) %>% 
@@ -45,8 +65,14 @@ voc <- read_csv(file.path(OSCADATADIR,"2022", "gc.csv")) %>%
   select(!contains("_w")) %>% 
   filter(type == "Sample") %>% 
   select(!contains("uncertainty")) %>% 
-  select(-c("...1"))
+  select(-c("...1")) %>% 
+  select(!c(acetaldehyde,nonane,type))
 
+co <- read_csv(file.path(OSCADATADIR,"2022", "co.csv")) %>% 
+  rename(date = datetime, ch4 = "CH4 (ppm)",
+         co = `CO (ppb)`) %>% 
+  select(!contains("qc_Flag")) %>% 
+  select(date, co, ch4) 
 
 
 # This is the estimated BL height in m
@@ -67,34 +93,29 @@ acsm <- read_csv(file.path(OSCADATADIR,"2022", "acsm.csv")) %>%
 acsm$pnh4[acsm$pnh4 < -2] = 0
 
 xact2_5 <- read_csv(file.path(OSCADATADIR,"2022", "xact2_5.csv")) %>% 
-  mutate(datetime = ymd_hms(datetime)) %>% 
-  select(c(datetime,contains("Cl"))) %>% 
+  mutate(datetime = dmy_hm(datetime)) %>% 
+  #select(c(datetime,contains("Cl"))) %>% 
   select(!contains("flag")) %>% 
   rename(date = datetime, pcl_2_5 = "PM2.5_Cl 17 (ug/m3)",
-         pcl_2_5_unc = "PM2.5_Cl Uncert (ug/m3)") 
+         pcl_2_5_unc = "PM2.5_Cl Uncert (ug/m3)",
+         pk_2_5 = "PM2.5_K 19 (ug/m3)") %>% 
+  #pk_2_5_unc = "PM2.5_K Uncert (ug/m3)") 
+  mutate(pcl_2_5 = pcl_2_5 / 35.45, pk_2_5 = pk_2_5 / 39.098) 
 
 
 xact10 <- read_csv(file.path(OSCADATADIR,"2022", "xact10.csv")) %>% 
   mutate(datetime = dmy_hm(datetime)) %>% 
-  select(c(datetime,contains("Cl"))) %>% 
+  #select(c(datetime,contains("Cl"))) %>% 
   select(!contains("flag")) %>% 
   rename(date = datetime, pcl_10 = "PM10_Cl 17 (ug/m3)",
-         pcl_10_unc = "PM10_Cl Uncert (ug/m3)")
+         pcl_10_unc = "PM10_Cl Uncert (ug/m3)",        
+         pk_10 = "PM10_K 19 (ug/m3)") %>% 
+  mutate(pcl_10 = pcl_10 / 35.45, pk_10 = pk_10 / 39.098)
 
 smps <- read_csv(file.path(OSCADATADIR,"2022", "smps.csv")) %>% 
   mutate(datetime = dmy_hm(datetime)) %>% 
   rename(date = datetime)
 
-
-
-
-voc <- read_csv(file.path(OSCADATADIR,"2022", "gc.csv")) %>% 
-  mutate(date = dmy_hms(date)) %>% 
-  select(!contains("flag")) %>% 
-  select(!contains("_w")) %>% 
-  filter(type == "Sample") %>% 
-  select(!contains("uncertainty")) %>% 
-  select(-c("...1"))
 
 
 met <- read_csv(file.path(OSCADATADIR,"2022", "fidas-met.csv")) %>% 
@@ -105,11 +126,13 @@ names(met) = c("date","tempC","press","rh","tempK")
 
 
 dfMaster <- tildas %>% 
+  full_join(kdep) %>% 
   full_join(clno2) %>% 
   full_join(no2) %>% 
   full_join(nonoy) %>% 
   full_join(n2o5_cl2) %>% 
   full_join(o3) %>% 
+  full_join(co) %>% 
   full_join(so2) %>% 
   full_join(voc) %>% 
   full_join(pblh) %>% 
@@ -118,10 +141,16 @@ dfMaster <- tildas %>%
   full_join(xact2_5) %>% 
   full_join(xact10) %>% 
   full_join(specrad) %>% 
-  full_join(smps) %>% 
+  #full_join(smps) %>% 
   arrange(date) %>% 
   select(!contains("Diff")) %>% 
-  select(!contains("qc"))
+  select(!contains("qc")) %>% 
+  mutate(nDensAir = press*100 * 6.022e23/8.314/tempK) %>% 
+  mutate(hcl_ug_m3 = hcl*10^-12 * nDensAir /6.02e23*(35.45+1.008)*10^6) %>% 
+  mutate(hcl_umol_m3 = hcl*10^-12 * nDensAir /6.02e23*10^6,
+         pcl_1_ppb = pcl_1 / 35.45/nDensAir *6.02e23*1000 ) %>% 
+  mutate(no = ifelse(no > 10, NA, no))
+
 
 dfMasterOut <- dfMaster %>%
   filter(between(date, ymd("2022-02-01"), ymd("2022-02-28"))) %>% 
@@ -135,6 +164,48 @@ write_csv(dfMasterOut, file.path(OSCADATADIR, "2022", "dfMaster-10min.csv"))
 
 
 
+
+
+forDiurnal <- dfMaster %>% 
+  filter(between(date,ymd("2022-02-05"),ymd("2022-02-20"))) #%>% 
+  #select(date, hcl_ug_m3,hcl_umol_m3,`pm2.5_Cl (umol/m3)`,`pm2.5_K (umol/m3)`,
+  #       pcl_10,pcl_2_5,pk_2_5,pk_10)
+
+
+namesForAnal <- names(forDiurnal)
+
+
+dfDiurnal<- timeVariation(forDiurnal,
+                          pollutant = namesForAnal[2:length(namesForAnal)],plot = FALSE)$data$hour %>% 
+  mutate(Upper = Upper - Mean) %>% 
+  mutate(Lower = Mean - Lower) 
+
+
+kdepDiurnal <- timeVariation(kdep,pollutant = "khcl")$data$hour %>%
+  mutate(Upper = Upper - Mean) %>% 
+  mutate(Lower = Mean - Lower) 
+write.csv(kdepDiurnal,file.path(OSCADATADIR,"2022","kdep-diurnal.csv"),
+            quote = FALSE,row.names = FALSE)
+
+
+
+dfDiurnalOut <- dfDiurnal %>%  
+  full_join(kdepDiurnal) %>% 
+  group_by(variable) %>% 
+  select(!c("default","ci")) %>% 
+  arrange(variable) %>%
+  pivot_wider(names_from=variable,values_from = c(Mean, Lower, Upper))
+
+
+write_csv(dfDiurnalOut, file.path(OSCADATADIR, "2022", "dfMasterDiurnal.csv"))
+
+
+justMeans <- dfDiurnalOut %>% 
+  select(hour,contains("Mean"))
+names(justMeans) <- gsub("Mean_","",names(justMeans))
+justMeans[justMeans<0] = 0# F0AM needs positive values
+
+write_csv(justMeans, file.path(OSCADATADIR, "2022", "dfMasterDiurnal_justmeans.csv"))
 
 
 
@@ -162,6 +233,8 @@ sTime <- as.POSIXct(paste(year, day_of_year, hour, minute, second, sep = " "),
 # 276 K
 
 # Diurnals ----------------------------------------------------------------
+
+
 
 
 timeVariation(tildas,pollutant = "hcl")$data$hour %>%
