@@ -1,5 +1,6 @@
 # Used for downloading met files from the NOAA repository
 
+options(timeout = 300)
 METFILEDIR <- "C:/HYSPLIT/metfiles/"
 
 
@@ -8,7 +9,7 @@ METFILEDIR <- "C:/HYSPLIT/metfiles/"
 #
 
 
-getMet <- function(year = 2021, month = 1, path_met = METFILEDIR) {
+getMet <- function(year = 2015, month = 1, path_met = METFILEDIR) {
   
   for (i in seq_along(year)) {
     for (j in seq_along(month)) {
@@ -65,7 +66,7 @@ getMetGdas <- function(year = 2021, month = 1:12, path_met = METFILEDIR) {
   }
 }
 
-getMetGdas(year = 2024, month = 1:12)
+getMetGdas(year = 2016, month = 8:12)
 
 
 
