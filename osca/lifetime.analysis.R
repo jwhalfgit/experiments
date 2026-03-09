@@ -144,7 +144,7 @@ get.hcl.kdep <- function(TEMP = dfAnal$tempK,SA = dfAnal$pm2_5_combined){
 fidas2021 <- read_csv(file.path(OSCADATADIR, "2021", "fidas-conc.csv")) %>% 
   mutate(date = ymd_hms(datetime)) %>% 
   filter(between(date, ymd_hm("2021-06-10 00:00"),ymd_hm("2021-07-21 00:00"))) %>% 
-  mutate(date = floor_date(date,unit = "hours")) %>% 
+  mutate(date = floor_date(date,unit = "5 minute")) %>% 
   select(!datetime) %>% 
   group_by(date) %>% 
   summarize_all(mean, na.rm = TRUE)
@@ -157,7 +157,7 @@ smps2021 <- read_csv(file.path(OSCADATADIR, "2021", "smps.csv")) %>%
   mutate(datetime = dmy_hm(datetime)) %>% 
   rename(ts = datetime) %>% 
   filter(between(ts, ymd_hm("2021-06-10 00:00"),ymd_hm("2021-07-21 00:00"))) %>% 
-  mutate(ts = floor_date(ts,unit = "hours")) %>% 
+  mutate(ts = floor_date(ts,unit = "5 minute")) %>% 
   group_by(ts) %>% 
   summarize_all(mean, na.rm = TRUE)
 smps2021[,2:107] <- smps2021[,2:107]/64 # the bin size in the SMPS is 1/64
@@ -166,7 +166,7 @@ met2021 <- read_csv(file.path(OSCADATADIR,"2021", "fidas-met.csv")) %>%
   mutate(datetime = dmy_hm(datetime)) %>% 
   select(!contains("flag")) %>% 
   rename(ts = datetime) %>% 
-  mutate(ts = floor_date(ts,unit = "hours")) %>% 
+  mutate(ts = floor_date(ts,unit = "5 minute")) %>% 
   group_by(ts) %>% 
   summarize_all(mean,na.rm = TRUE)
 names(met2021) = c("ts","tempC","press","rh","tempK")
@@ -196,7 +196,7 @@ smps2022 <- read_csv("G:/My Drive/Experiments/OSCA/data/2022/smps.csv") %>%
   mutate(datetime = dmy_hm(datetime)) %>% 
   rename(ts = datetime) %>% 
   filter(between(ts, ymd_hm("2022-01-23 00:00"),ymd_hm("2022-02-28 00:00"))) %>% 
-  mutate(ts = floor_date(ts,unit = "hours")) %>% 
+  mutate(ts = floor_date(ts,unit = "5 minutes")) %>% 
   group_by(ts) %>% 
   summarize_all(mean,na.rm = TRUE)
 smps2022[,2:107] <- smps2022[,2:107] / 64
@@ -205,7 +205,7 @@ smps2022[,2:107] <- smps2022[,2:107] / 64
 fidas2022 <- read_csv(file.path(OSCADATADIR, "2022", "fidas-conc.csv")) %>% 
   mutate(date = dmy_hm(datetime)) %>% 
   filter(between(date, ymd_hm("2022-01-23 00:00"),ymd_hm("2022-02-28 00:00"))) %>% 
-  mutate(date = floor_date(date,unit = "hours")) %>% 
+  mutate(date = floor_date(date,unit = "5 minutes")) %>% 
   select(!datetime) %>% 
   group_by(date) %>% 
   summarize_all(mean, na.rm = TRUE)
@@ -214,7 +214,7 @@ met2022 <- read_csv(file.path(OSCADATADIR,"2022", "fidas-met.csv")) %>%
   mutate(datetime = dmy_hm(datetime)) %>% 
   select(!contains("flag")) %>% 
   rename(ts = datetime) %>% 
-  mutate(ts = floor_date(ts,unit = "hours")) %>% 
+  mutate(ts = floor_date(ts,unit = "5 minutes")) %>% 
   group_by(ts) %>% 
   summarize_all(mean,na.rm = TRUE)
 names(met2022) = c("ts","tempC","press","rh","tempK")
