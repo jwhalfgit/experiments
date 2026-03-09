@@ -61,12 +61,16 @@ so2 <- read_csv(file.path(OSCADATADIR,"2022", "noy_so2_yrk.csv")) %>%
 
 voc <- read_csv(file.path(OSCADATADIR,"2022", "gc.csv")) %>% 
   mutate(date = dmy_hm(date)) %>% 
+  filter(!between(date, ymd_hm("2022-02-05 22:00"), ymd_hm("2022-02-07 12:00"))) %>%
+  filter(!between(date, ymd_hm("2022-02-12 10:00"), ymd_hm("2022-02-14 18:00"))) %>% 
   select(!contains("flag")) %>% 
   select(!contains("_w")) %>% 
   filter(type == "Sample") %>% 
   select(!contains("uncertainty")) %>% 
   select(-c("...1")) %>% 
-  select(!c(acetaldehyde,nonane,type))
+  select(!c(acetaldehyde,nonane,type)) %>% 
+  mutate(across(.cols = -date, .fns = ~if_else(.x <= 0.001, NA_real_, .x)))
+  
 
 co <- read_csv(file.path(OSCADATADIR,"2022", "co.csv")) %>% 
   rename(date = datetime, ch4 = "CH4 (ppm)",
@@ -170,6 +174,11 @@ forDiurnal <- dfMaster %>%
   filter(between(date,ymd("2022-02-05"),ymd("2022-02-20"))) #%>% 
   #select(date, hcl_ug_m3,hcl_umol_m3,`pm2.5_Cl (umol/m3)`,`pm2.5_K (umol/m3)`,
   #       pcl_10,pcl_2_5,pk_2_5,pk_10)
+
+test <- forDiurnal %>% 
+  mutate(ts= floor_date(date, unit = "day")) %>% 
+  group_by(ts) %>% 
+  summarize(outClNO2 = max(clno2,na.rm = TRUE))
 
 
 namesForAnal <- names(forDiurnal)
