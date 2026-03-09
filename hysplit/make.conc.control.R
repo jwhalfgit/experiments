@@ -25,13 +25,17 @@ sites <- as.data.frame(matrix(data = c(53.44,-2.21,"Manchester Air Quality Site"
                                        51.45, -0.04,  "London Super Site",
                                        51.08, -4.10, "Barnstaple Center",
                                        55.79, -3.24, "Auchencorth Moss",
-                                       51.15, -1.44, "Chilbolton Observatory"),
+                                       51.15, -1.44, "Chilbolton Observatory",
+                                       52.61, 1.30, "Norwich Center",
+                                       53.75, -0.34, "Hull Center"),
                               ncol=3,byrow=TRUE,dimnames = list(c(),c("lat","lon","loc"))))
 
 
 sites$lat <- as.numeric(sites$lat)
 sites$lon <- as.numeric(sites$lon)
 
+
+sites = sites[1,]
 # GDAS Data Codes ---------------------------------------------------------
 
 
@@ -219,8 +223,8 @@ build.ctrl <- function(TIME.LOC, GPS, HEIGHTS=10, RT=-72, VERT=0, BL.height = 10
 }
 
 
-projTimes <- seq(from=as.POSIXct("2017-01-04 00:00:00",tz="UTC"), 
-                      to = as.POSIXct("2024-12-31 12:00:00",tz="UTC"), by="12 hours")
+projTimes <- seq(from=as.POSIXct("2015-01-04 00:00:00",tz="UTC"), 
+                      to = as.POSIXct("2024-12-31 12:00:00",tz="UTC"), by="3 hours")
 
 make.ctrl.files <- function(LOC = sites, TIMES = projTimes){
 
