@@ -45,9 +45,9 @@ co <- read_csv(file.path(OSCADATADIR,"2021", "co.csv")) %>%
   select(date, co, ch4) 
 
   
-# specrad <-read_csv(file.path(OSCADATADIR,"2021", "specrad.csv")) %>%
-#   rename(date = datetime) %>%
-#   mutate(date = dmy_hms(date) )
+specrad <-read_csv(file.path(OSCADATADIR,"2021", "specrad.csv")) %>%
+  rename(date = datetime) %>%
+  mutate(date = dmy_hm(date) )
 
 no2 <- read_csv(file.path(OSCADATADIR,"2021","no2.csv")) %>% 
   rename(date = datetime, no2 = `NO2 (ppb)`) %>% 
@@ -168,10 +168,10 @@ xact10 <- read_csv(file.path(OSCADATADIR,"2021", "xact10.csv")) %>%
 smps <- read_csv(file.path(OSCADATADIR, "2021", "smps.csv")) %>% 
   mutate(datetime = dmy_hm(datetime)) %>% 
   rename(ts = datetime) %>% 
-  filter(between(ts, ymd_hm("2021-06-10 00:00"),ymd_hm("2021-07-21 00:00"))) %>% 
-  mutate(ts = floor_date(ts,unit = "hours")) %>% 
-  group_by(ts) %>% 
-  summarize_all(mean, na.rm = TRUE)
+  filter(between(ts, ymd_hm("2021-06-10 00:00"),ymd_hm("2021-07-21 00:00")))
+  # mutate(ts = floor_date(ts,unit = "hours")) %>% 
+  # group_by(ts) %>% 
+  # summarize_all(mean, na.rm = TRUE)
 smps[,2:107] <- smps[,2:107]/64 # the bin size in the SMPS is 1/64
 
 
@@ -212,10 +212,15 @@ dfMaster[dfMaster==-9999] <- NA
   
 dfMasterOut <- dfMaster %>%
   filter(between(date, ymd("2021-06-10"), ymd("2021-07-22"))) %>% 
-  mutate(date = floor_date(date,"10 min")) %>% 
+  mutate(date = floor_date(date,"60 min")) %>% 
   group_by(date) %>% 
   summarise_all(mean,na.rm=TRUE)
 
+
+# dfMasterTest <- dfMasterOut %>% 
+#  mutate(hr = hour(date)*60 + minute(date)) %>% 
+#   group_by(hr) %>% 
+#   summarise_all(mean, na.rm = TRUE)
 
   
 write_csv(dfMasterOut, file.path(OSCADATADIR, "2021", "dfMaster.csv"))
@@ -226,6 +231,12 @@ namesForAnal <- names(dfMaster)[2:ncol(dfMaster)]
 
 forDiurnal <- dfMaster %>% 
   filter(between(date,ymd("2021-06-11"),ymd("2021-06-18")))
+
+
+# test <- forDiurnal %>% 
+#   mutate(ts= floor_date(date, unit = "day")) %>% 
+#   group_by(ts) %>% 
+#   summarize(outClNO2 = max(clno2,na.rm = TRUE))
 
 
 dfDiurnal<- timeVariation(forDiurnal,
@@ -248,8 +259,26 @@ justMeans <- dfDiurnalOut %>%
   select(hour,contains("Mean"))
 names(justMeans) <- gsub("Mean_","",names(justMeans))
 justMeans$oh[justMeans$oh <0] = 0# F0AM needs positive values
+justMeans$n2o5[7:20] = c(0.00101913747638370, # replacing N2O5 obs concs
+                         0.000737234068900781, # with model values during
+                         0.000556610616877921, # day, as presumably the noise
+                         0.000425291436764625, # on the instrument is causing 
+                         0.000388890350722431, # much NO3 formation, when
+                         0.000294628781629632, # actually there shouldn't be any
+                         0.000263374539948984, # left.
+                         0.000289127518913388,
+                         0.000312417911925639,
+                         0.000444355930423972,
+                         0.000475914128386317,
+                         0.000547892463716050,
+                         0.000871897660074909,
+                         0.00244676782877254)
 
-write_csv(justMeans, file.path(OSCADATADIR, "2021", "dfMasterDiurnal_justmeans.csv"))
+# Replacing ClNO2 with model output assuming no dilution.
+justMeans$clno2 = c(0.113999943089734,0.113952529919093,0.113798993786400,0.113646154817884,0.110426376830379,0.0975368755182590,0.0724932558208897,0.0441388681341426,0.0224217570955975,0.00992811880909394,0.00403818369465142,0.00158733546844921,0.000653623358986804,0.000306176429638178,0.000176507220349854,0.000134518141061852,0.000115433497688378,0.000114087696653560,0.000115017317912780,0.000116653858020567,0.000116589153307071,0.000116266145613305,0.000115957859175190,0.000115656088930751)
+
+
+write_csv(justMeans, file.path(OSCADATADIR, "2021", "dfMasterDiurnal_justmeans_altclno2_n2o5.csv"))
 
   
 
