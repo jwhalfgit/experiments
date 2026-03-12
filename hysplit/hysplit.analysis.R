@@ -986,186 +986,11 @@ DATEMAM1 = "2023-03-01"
 DATEMAM2 = "2023-05-31"
 
 
-dateMat <- matrix(c(#DATEJJA1,DATEJJA2,DATESON1,DATESON2,
-                    #DATEDJF1,DATEDJF2,DATEMAM1,DATEMAM2),
+dateMat <- matrix(c(DATEJJA1,DATEJJA2,DATESON1,DATESON2,
+                    DATEDJF1,DATEDJF2,DATEMAM1,DATEMAM2,
                     DATEJJA1, DATEMAM2),
                   ncol = 2, byrow = TRUE)
 
-
-# DATES needs to be a 2 column matrix
-eqMVRLoc <- function(locEq, locBox, DATES = dateMat){
-  plotList <- list() # for output plot
-  statsList <- list() # for R2
-  outList <- list() # for model statistics
-  outVifList <- list() # for VIF calculations
-  for(ix in 1:nrow(DATES)){
-    locSurf <- sourceBoxes(locBox,DATE1 = DATES[ix,1], DATE2 = DATES[ix,2],
-                            PLOT = FALSE, PCT = FALSE, OUTPUT = "BOXES") %>% 
-      filter(hour(date) == 12) %>%  # I think noon will be more appropriate than midnight, since 
-      # there's only one eq point each day.  So now we've selected noon,
-    # let's now round down to the start of the day:
-    mutate(date = floor_date(date, "1 day"))
-      
-      
-    locDf <- locEq %>% 
-      left_join(locSurf) %>% 
-      filter(complete.cases(.)) %>% 
-      mutate(water = loc_1 + loc_7 + loc_8,
-             europe = loc_4 + loc_10 + loc_11,
-             uk = loc_9,
-             africa = loc_3,
-             americas = loc_2 + loc_5) # includes Greeland
-    
-    nzvStats <- nearZeroVar(locDf, saveMetrics = TRUE)
-    
-    
-    # View the results
-    print(nzvStats)
-    nonZeroVars <- rownames(nzvStats[nzvStats$nzv == FALSE, ])
-    nonZeroVars <- nonZeroVars[which(nonZeroVars %in% c("water", 
-                                                        "europe",
-                                                        "uk",
-                                                        "africa",
-                                                        "americas"))]    
-    attach(locDf)
-     regEq <- paste0("deltadelta~",paste(nonZeroVars,collapse = "+"))
-     test <- lm(regEq)
-    #test <- lm(deltadelta ~ water + europe + uk + africa + americas)
-    
-    detach(locDf)
-    out <- summary(test)
-    outVif <- car::vif(test) 
-    outVif$`(Intercept)` = NA
-    outVifList[[ix]] <- unlist(outVif)
-    
-    
-    toPlot <- out %>% 
-      broom::tidy(conf.int = TRUE) %>% 
-      filter(term != "(Intercept)") # not sure if meaningful?
-    
-
-    #   
-    sink(file = paste0("G:/My Drive/Experiments/DEFRA/hysplit/seasonal_mvr/",
-                       deparse(substitute(locEq)), "_surf-lessnzv",
-                       gsub("-","",DATES[ix,1]),
-                       gsub("-","",DATES[ix,2])))
-    print(out)
-    print(outVif)
-    sink()
-    
-    
-  outList[[ix]] <- broom::tidy(out,conf.int = TRUE)
-  
-  statsList[[ix]] <- broom::glance(test) %>%
-    select(r.squared, p.value) %>%
-    mutate(p_label = ifelse(p.value < 0.001,
-                            "p < 0.001",
-                            paste0("p = ", round(p.value, 3))),
-           combined_label = paste0("R² = ", round(r.squared, 2), "\n", p_label),
-           model = as.character(ix)) %>%  # Match the ID used in bind_rows
-    select(model, combined_label)
-  }
-  
-  # get R2
-
-
-  outputCombined <- bind_rows(outList, .id = "model") %>%
-    filter(term != "(Intercept)")
-
-  statsCombined <- bind_rows(statsList)
-  
-  vifCombined <- bind_rows(outVifList) %>% 
-    write_csv(paste0("G:/My Drive/Experiments/DEFRA/hysplit/seasonal_mvr/",
-                     deparse(substitute(locEq)), "_surf-lessnzv-VIF",
-                     gsub("-","",DATES[ix,1]),
-                     gsub("-","",DATES[ix,2]),".csv"))
-
-
-    
-  # define some useful plotting constants:
-  num_terms <- length(unique(outputCombined$model))
-  if(num_terms > 1){#
-    sep_lines <- seq(1.5, num_terms - 0.5, by = 1)
-  }else{
-    sep_lines <- 1.5
-  }
-  
-  regionCols <- c(
-    "water"    = "#0072b2", # Blue
-    "europe"   = "#42B540", # Green
-    "uk"       = "#9D7660", # Brown
-    "africa"   = "#D7B5A6", # Tan/Peach
-    "americas" = "#FF6F00"  # Orange
-  )
-  
-  master_labels <- c("africa" = "Africa", "americas" = "Americas", 
-                     "europe" = "Europe", "water" = "Water", "uk" = "UK")
-  
-  plotOut <- ggplot(data = outputCombined,aes(x =as.factor(model), 
-                                             y = estimate,
-                                             fill = term, color = term))+
-    geom_bar(stat = "identity", 
-             position = position_dodge(width = 0.9),
-             alpha = 0.5)+
-    
-    
-    #ylim(c(-0.2,0.2))+
-    #coord_cartesian(ylim = c(-1, 1.2)) + # prevents removal of info if offscale
-    coord_cartesian(ylim = c(-0.15, 0.2)) + # prevents removal of info if offscale
-    geom_text(aes(y = estimate + ifelse(estimate >= 0, std.error + 0.025, -std.error - 0.025),
-                  label = paste0("p=", round(p.value, 3))), 
-              size = 3.5, 
-              position = position_dodge(width = 0.9),
-              show.legend = FALSE) +
-    
-    geom_vline(xintercept = sep_lines, color = "gray80", linetype = "dashed") +
-    scale_fill_manual(name = "Region",
-                      values = regionCols,
-                      labels = master_labels
-                      ) +
-    scale_color_manual(name = "Region",
-                       values = regionCols,
-                      labels = master_labels
-    ) +
-    geom_errorbar(aes(ymin = estimate - std.error, 
-                      ymax = estimate + std.error), 
-                  width = 0.2,
-                  position = position_dodge(width = 0.9),
-                  show.legend = FALSE)+
-    # Label for R2
-    geom_label(data = statsCombined, 
-               aes(x = as.factor(model), 
-                   y = 1.3,
-                   label = combined_label),
-               fill = "white", 
-               vjust = 1.2, # adjusts the vertical position of the annotation
-               color = "black", 
-               fontface = "bold",
-               lineheight = 0.9, 
-               size = 4.5) +
-    
-    theme_minimal()+
-    labs(x = "Region", y = expression("Predictor (ug m" ^-3* ")"))+
-         # fill = "Region",color= "Region")+
-    # labs(x = "Region", y = expression("Predictor (ug m" ^-3* ")"),
-    #      title = paste0(DATES[ix,1],"/", DATES[ix,2]), fill = "Region")+
-    theme(legend.position = "bottom", text = element_text(size = 18))+
-    #guides(fill = guide_legend(override.aes = list(alpha = 1, color = NA)))+
-     scale_x_discrete(#guide = guide_axis(n.dodge = 3),
-                      #labels = c("JJA", "SON", "DJF", "MAM"),
-    #                  breaks = c("1", "2", "3", "4"))+
-                      labels = c("All"))+
-    scale_y_continuous(n.breaks = 10)
-                       #expand = expansion(mult = c(0.15,0.1)))#,
-                       #limits = c(-0.2,0.2))
-  
-  # outPlot <- grid.arrange(grobs = plotList, ncol = 3)
-  ggsave(paste0("G:/My Drive/Experiments/DEFRA/hysplit/seasonal_mvr/",
-                deparse(substitute(locEq)),"-nvrRemoved-allseasons.png"),plot = plotOut,
-         width = 12.8, height = 10.24, units = "in")
-  
-   return(print(plotOut))
-}
 
 barncPlot <- eqMVRLoc(locEq = barncEq, locBox = barnc)
 maqsPlot <- eqMVRLoc(locEq = maqsEq, locBox = maqs)
@@ -1220,184 +1045,6 @@ dateMat <- matrix(c(#DATEJJA1,DATEJJA2,DATESON1,DATESON2,
   #DATEDJF1,DATEDJF2,DATEMAM1,DATEMAM2),
   DATEJJA1, DATEMAM2),
   ncol = 2, byrow = TRUE)
-
-# DATES needs to be a 2 column matrix
-eqMVRComp <- function(locEq, locAcsm, DATES = dateMat){
-  plotList <- list() # for output plot
-  statsList <- list() # for R2
-  outList <- list() # for model statistics
-  outVifList <- list() # for VIF calculations
-  
-  
-  for(ix in 1:nrow(DATES)){
-    locSurf <- sourceBoxes(locBox,DATE1 = DATES[ix,1], DATE2 = DATES[ix,2],
-                           PLOT = FALSE, PCT = FALSE, OUTPUT = "BOXES") %>% 
-      filter(hour(date) == 12) %>%  # I think noon will be more appropriate than midnight, since 
-      # there's only one eq point each day.  So now we've selected noon,
-      # let's now round down to the start of the day:
-      mutate(date = floor_date(date, "1 day"))
-    
-    
-    locDf <- locEq %>% 
-      left_join(locSurf) %>% 
-      filter(complete.cases(.)) %>% 
-      mutate(water = loc_1 + loc_7 + loc_8,
-             europe = loc_4 + loc_10 + loc_11,
-             uk = loc_9,
-             africa = loc_3,
-             americas = loc_2 + loc_5) # includes Greeland
-    
-    nzvStats <- nearZeroVar(locDf, saveMetrics = TRUE)
-    
-    
-    # View the results
-    print(nzvStats)
-    nonZeroVars <- rownames(nzvStats[nzvStats$nzv == FALSE, ])
-    nonZeroVars <- nonZeroVars[which(nonZeroVars %in% c("water", 
-                                                        "europe",
-                                                        "uk",
-                                                        "africa",
-                                                        "americas"))]    
-    attach(locDf)
-    regEq <- paste0("deltadelta~",paste(nonZeroVars,collapse = "+"))
-    test <- lm(regEq)
-    #test <- lm(deltadelta ~ water + europe + uk + africa + americas)
-    
-    detach(locDf)
-    out <- summary(test)
-    outVif <- car::vif(test) 
-    outVif$`(Intercept)` = NA
-    outVifList[[ix]] <- unlist(outVif)
-    
-    
-    toPlot <- out %>% 
-      broom::tidy(conf.int = TRUE) %>% 
-      filter(term != "(Intercept)") # not sure if meaningful?
-    
-    
-    #   
-    sink(file = paste0("G:/My Drive/Experiments/DEFRA/hysplit/seasonal_mvr/",
-                       deparse(substitute(locEq)), "_surf-lessnzv",
-                       gsub("-","",DATES[ix,1]),
-                       gsub("-","",DATES[ix,2])))
-    print(out)
-    print(outVif)
-    sink()
-    
-    
-    outList[[ix]] <- broom::tidy(out,conf.int = TRUE)
-    
-    statsList[[ix]] <- broom::glance(test) %>%
-      select(r.squared, p.value) %>%
-      mutate(p_label = ifelse(p.value < 0.001,
-                              "p < 0.001",
-                              paste0("p = ", round(p.value, 3))),
-             combined_label = paste0("R² = ", round(r.squared, 2), "\n", p_label),
-             model = as.character(ix)) %>%  # Match the ID used in bind_rows
-      select(model, combined_label)
-  }
-  
-  # get R2
-  
-  
-  outputCombined <- bind_rows(outList, .id = "model") %>%
-    filter(term != "(Intercept)")
-  
-  statsCombined <- bind_rows(statsList)
-  
-  vifCombined <- bind_rows(outVifList) %>% 
-    write_csv(paste0("G:/My Drive/Experiments/DEFRA/hysplit/seasonal_mvr/",
-                     deparse(substitute(locEq)), "_surf-lessnzv-VIF",
-                     gsub("-","",DATES[ix,1]),
-                     gsub("-","",DATES[ix,2]),".csv"))
-  
-  
-  
-  # define some useful plotting constants:
-  num_terms <- length(unique(outputCombined$model))
-  if(num_terms > 1){#
-    sep_lines <- seq(1.5, num_terms - 0.5, by = 1)
-  }else{
-    sep_lines <- 1.5
-  }
-  
-  regionCols <- c(
-    "water"    = "#0072b2", # Blue
-    "europe"   = "#42B540", # Green
-    "uk"       = "#9D7660", # Brown
-    "africa"   = "#D7B5A6", # Tan/Peach
-    "americas" = "#FF6F00"  # Orange
-  )
-  
-  master_labels <- c("africa" = "Africa", "americas" = "Americas", 
-                     "europe" = "Europe", "water" = "Water", "uk" = "UK")
-  
-  plotOut <- ggplot(data = outputCombined,aes(x =as.factor(model), 
-                                              y = estimate,
-                                              fill = term, color = term))+
-    geom_bar(stat = "identity", 
-             position = position_dodge(width = 0.9),
-             alpha = 0.5)+
-    
-    
-    #ylim(c(-0.2,0.2))+
-    #coord_cartesian(ylim = c(-1, 1.2)) + # prevents removal of info if offscale
-    coord_cartesian(ylim = c(-0.15, 0.2)) + # prevents removal of info if offscale
-    geom_text(aes(y = estimate + ifelse(estimate >= 0, std.error + 0.025, -std.error - 0.025),
-                  label = paste0("p=", round(p.value, 3))), 
-              size = 3.5, 
-              position = position_dodge(width = 0.9),
-              show.legend = FALSE) +
-    
-    geom_vline(xintercept = sep_lines, color = "gray80", linetype = "dashed") +
-    scale_fill_manual(name = "Region",
-                      values = regionCols,
-                      labels = master_labels
-    ) +
-    scale_color_manual(name = "Region",
-                       values = regionCols,
-                       labels = master_labels
-    ) +
-    geom_errorbar(aes(ymin = estimate - std.error, 
-                      ymax = estimate + std.error), 
-                  width = 0.2,
-                  position = position_dodge(width = 0.9),
-                  show.legend = FALSE)+
-    # Label for R2
-    geom_label(data = statsCombined, 
-               aes(x = as.factor(model), 
-                   y = 1.3,
-                   label = combined_label),
-               fill = "white", 
-               vjust = 1.2, # adjusts the vertical position of the annotation
-               color = "black", 
-               fontface = "bold",
-               lineheight = 0.9, 
-               size = 4.5) +
-    
-    theme_minimal()+
-    labs(x = "Region", y = expression("Predictor (ug m" ^-3* ")"))+
-    # fill = "Region",color= "Region")+
-    # labs(x = "Region", y = expression("Predictor (ug m" ^-3* ")"),
-    #      title = paste0(DATES[ix,1],"/", DATES[ix,2]), fill = "Region")+
-    theme(legend.position = "bottom", text = element_text(size = 18))+
-    #guides(fill = guide_legend(override.aes = list(alpha = 1, color = NA)))+
-    scale_x_discrete(#guide = guide_axis(n.dodge = 3),
-      #labels = c("JJA", "SON", "DJF", "MAM"),
-      #                  breaks = c("1", "2", "3", "4"))+
-      labels = c("All"))+
-    scale_y_continuous(n.breaks = 10)
-  #expand = expansion(mult = c(0.15,0.1)))#,
-  #limits = c(-0.2,0.2))
-  
-  # outPlot <- grid.arrange(grobs = plotList, ncol = 3)
-  ggsave(paste0("G:/My Drive/Experiments/DEFRA/hysplit/seasonal_mvr/",
-                deparse(substitute(locEq)),"-nvrRemoved-allseasons.png"),plot = plotOut,
-         width = 12.8, height = 10.24, units = "in")
-  
-  return(print(plotOut))
-}
-
 
 
 # MAQS ACSM ---------------------------------------------------------------
@@ -2034,7 +1681,85 @@ comp_mvr_out <- ggarrange(maqsCompPlots,
 
 ggsave(paste0("G:/My Drive/Experiments/DEFRA/hysplit/seasonal_mvr/composition-groupedsites-nh4.png"),
        plot = comp_mvr_out,
-       width = 12.8, height = 10.24, units = "in")
+       width = 19.8, height = 14.8, units = "in",
+       bg = "white")
+
+
+###############################################################################
+#
+# BAM
+#
+###############################################################################
+# Summer JJA
+DATEJJA1 = "2022-05-20"
+DATEJJA2 = "2022-08-30"
+
+# Autumn SON
+DATESON1 = "2022-09-01"
+DATESON2 = "2022-11-30"
+
+# Winter DJF
+DATEDJF1 = "2022-12-01"
+DATEDJF2 = "2023-02-28"
+
+#Spring MAM
+DATEMAM1 = "2023-03-01"
+DATEMAM2 = "2023-05-31"
+
+
+maqsBAMEQ <- read_csv("G:/My Drive/Experiments/defra/data/bam/maqs.csv") %>% 
+  mutate(across(!date, as.numeric),
+         deltaRefBAM = bam_corr - psol,
+         deltadelta_entire = bam_corr - mean(deltaRefBAM,na.rm = TRUE),
+         season = case_when(
+           date >= ymd(DATEJJA1) & date <= ymd(DATEJJA2) ~ "JJA",
+           date >= ymd(DATESON1) & date <= ymd(DATESON2) ~ "SON",
+           date >= ymd(DATEDJF1) & date <= ymd(DATEDJF1) ~ "DJF",
+           date >= ymd(DATEMAM2) & date <= ymd(DATEMAM2) ~ "MAM",
+           TRUE ~ NA_character_  # For dates that don't fall into these ranges
+         )) %>%
+  filter(!is.na(season)) %>%
+  # Group by season
+  group_by(season) %>%
+  # Calculate the average across data columns
+  mutate(ref_avg_season = median(psol, na.rm = TRUE),
+         bam_uncorr_avg_season = median(bam_uncorr, na.rm = TRUE),
+         bam_corr_avg_season = median(bam_corr, na.rm = TRUE)) %>% 
+    ungroup() %>% 
+    mutate(deltadeltaSeason = bam_corr - bam_corr_avg_season) %>% 
+  filter(complete.cases(.))
+                   
+
+
+
+testFullSeasons <- maqsBAMEQ %>% 
+  rename(deltadelta = deltadelta_entire)
+  eqMVRLoc(locAcsm = )
+
+
+
+chilbBAMEQ <- read_csv("G:/My Drive/Experiments/defra/data/bam/chilb.csv") %>% 
+  mutate(across(!date, as.numeric),
+         deltaRefBAM = bam_corr - digitel,
+         deltadelta_entire = bam_corr - mean(deltaRefBAM,na.rm = TRUE),
+         season = case_when(
+           date >= ymd(DATEJJA1) & date <= ymd(DATEJJA2) ~ "JJA",
+           date >= ymd(DATESON1) & date <= ymd(DATESON2) ~ "SON",
+           date >= ymd(DATEDJF1) & date <= ymd(DATEDJF1) ~ "DJF",
+           date >= ymd(DATEMAM2) & date <= ymd(DATEMAM2) ~ "MAM",
+           TRUE ~ NA_character_  # For dates that don't fall into these ranges
+         )) %>%
+  filter(!is.na(season)) %>%
+  # Group by season
+  group_by(season) %>%
+  # Calculate the average across data columns
+  mutate(ref_avg_season = median(digitel, na.rm = TRUE),
+         bam_uncorr_avg_season = median(bam_uncorr, na.rm = TRUE),
+         bam_corr_avg_season = median(bam_corr, na.rm = TRUE)) %>% 
+  ungroup() %>% 
+  mutate(deltadeltaSeason = bam_corr - bam_corr_avg_season) %>% 
+  filter(complete.cases(.))
+
 
 
 
