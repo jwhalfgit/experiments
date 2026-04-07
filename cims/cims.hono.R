@@ -1,19 +1,22 @@
+HONODIR <- "G:/My Drive/Experiments/CIMS/calibrations/"
+
+
 
 # NO ----------------------------------------------------------------------
 
-ffNO <- list.files("C:/Users/jh2949/OneDrive - University of York/Desktop/CIMS_analysis/HONO/T200",
-                    full.names=TRUE, pattern = ".csv")
-
-fileListNO <- lapply(ffNO,read_csv)
-dfT200 <- do.call(rbind,fileListNO) %>% 
-  rename(date = TheTime) %>% 
-  mutate(date = mdy_hms(date)) %>% 
-  select(date, T200_NO, T200_NO2, T200_NOx)
-
-write.csv(dfT200,"C:/Users/jh2949/OneDrive - University of York/Desktop/CIMS_analysis/HONO/T200/no-stitch.csv",
-           quote = FALSE, row.names = FALSE)
-
-dfT200 <- read_csv("C:/Users/jh2949/OneDrive - University of York/Desktop/CIMS_analysis/HONO/T200/no-stitch.csv")
+# ffNO <- list.files(paste0(HONODIR,"no2"),
+#                     full.names=TRUE, pattern = ".csv")
+# 
+# fileListNO <- lapply(ffNO,read_csv)
+# dfT200 <- do.call(rbind,fileListNO) %>% 
+#   rename(date = TheTime) %>% 
+#   mutate(date = mdy_hms(date)) %>% 
+#   select(date, T200_NO, T200_NO2, T200_NOx)
+# 
+# write.csv(dfT200,"C:/Users/jh2949/OneDrive - University of York/Desktop/CIMS_analysis/HONO/T200/no-stitch.csv",
+#            quote = FALSE, row.names = FALSE)
+# 
+# dfT200 <- read_csv("C:/Users/jh2949/OneDrive - University of York/Desktop/CIMS_analysis/HONO/T200/no-stitch.csv")
 
 
 t200List <- list()
