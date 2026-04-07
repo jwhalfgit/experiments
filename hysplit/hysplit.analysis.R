@@ -1707,15 +1707,23 @@ DATEMAM1 = "2023-03-01"
 DATEMAM2 = "2023-05-31"
 
 
+
+dateMat <- matrix(c(DATEJJA1,DATEJJA2,DATESON1,DATESON2,
+                    DATEDJF1,DATEDJF2,DATEMAM1,DATEMAM2,
+                    DATEJJA1, DATEMAM2),
+                  ncol = 2, byrow = TRUE)
+
+
 maqsBAMEQ <- read_csv("G:/My Drive/Experiments/defra/data/bam/maqs.csv") %>% 
+  mutate(date = parse_date_time(date, orders = "%Y-%m-%d")) %>% # converts date to datetime
   mutate(across(!date, as.numeric),
          deltaRefBAM = bam_corr - psol,
          deltadelta_entire = bam_corr - mean(deltaRefBAM,na.rm = TRUE),
          season = case_when(
            date >= ymd(DATEJJA1) & date <= ymd(DATEJJA2) ~ "JJA",
            date >= ymd(DATESON1) & date <= ymd(DATESON2) ~ "SON",
-           date >= ymd(DATEDJF1) & date <= ymd(DATEDJF1) ~ "DJF",
-           date >= ymd(DATEMAM2) & date <= ymd(DATEMAM2) ~ "MAM",
+           date >= ymd(DATEDJF1) & date <= ymd(DATEDJF2) ~ "DJF",
+           date >= ymd(DATEMAM1) & date <= ymd(DATEMAM2) ~ "MAM",
            TRUE ~ NA_character_  # For dates that don't fall into these ranges
          )) %>%
   filter(!is.na(season)) %>%
@@ -1726,27 +1734,44 @@ maqsBAMEQ <- read_csv("G:/My Drive/Experiments/defra/data/bam/maqs.csv") %>%
          bam_uncorr_avg_season = median(bam_uncorr, na.rm = TRUE),
          bam_corr_avg_season = median(bam_corr, na.rm = TRUE)) %>% 
     ungroup() %>% 
-    mutate(deltadeltaSeason = bam_corr - bam_corr_avg_season) %>% 
+    mutate(deltadeltaSeason = bam_corr - (bam_corr_avg_season-ref_avg_season)) %>% 
   filter(complete.cases(.))
                    
 
+# Note that changing deltadelta affects the intercept on a seasonal basis,
+# it doesn't affect the regression. However, it will affect the overall
+# terms when considered across the entire year, to a small extent.  
 
-
-testFullSeasons <- maqsBAMEQ %>% 
+maqsEqFullSeasons <- maqsBAMEQ %>% 
   rename(deltadelta = deltadelta_entire)
-  eqMVRLoc(locAcsm = )
+
+test <- eqMVRLoc(locEq = maqsEqFullSeasons, 
+                 locBox = maqs, 
+                 DATES= dateMat, 
+                 TAG = "BAM-totalMean")
+
+
+
+maqsSeasonAvg <- maqsBAMEQ %>% 
+  rename(deltadelta = deltadeltaSeason)
+
+
+test2<-   eqMVRLoc(locEq = maqsSeasonAvg,
+                   locBox = maqs, DATES= dateMat, TAG = "BAM-seasonalMean")
+
 
 
 
 chilbBAMEQ <- read_csv("G:/My Drive/Experiments/defra/data/bam/chilb.csv") %>% 
+  mutate(date = parse_date_time(date, orders = "%Y-%m-%d")) %>% # converts date to datetime
   mutate(across(!date, as.numeric),
          deltaRefBAM = bam_corr - digitel,
          deltadelta_entire = bam_corr - mean(deltaRefBAM,na.rm = TRUE),
          season = case_when(
            date >= ymd(DATEJJA1) & date <= ymd(DATEJJA2) ~ "JJA",
            date >= ymd(DATESON1) & date <= ymd(DATESON2) ~ "SON",
-           date >= ymd(DATEDJF1) & date <= ymd(DATEDJF1) ~ "DJF",
-           date >= ymd(DATEMAM2) & date <= ymd(DATEMAM2) ~ "MAM",
+           date >= ymd(DATEDJF1) & date <= ymd(DATEDJF2) ~ "DJF",
+           date >= ymd(DATEMAM1) & date <= ymd(DATEMAM2) ~ "MAM",
            TRUE ~ NA_character_  # For dates that don't fall into these ranges
          )) %>%
   filter(!is.na(season)) %>%
@@ -1757,9 +1782,29 @@ chilbBAMEQ <- read_csv("G:/My Drive/Experiments/defra/data/bam/chilb.csv") %>%
          bam_uncorr_avg_season = median(bam_uncorr, na.rm = TRUE),
          bam_corr_avg_season = median(bam_corr, na.rm = TRUE)) %>% 
   ungroup() %>% 
-  mutate(deltadeltaSeason = bam_corr - bam_corr_avg_season) %>% 
+  mutate(deltadeltaSeason = bam_corr - (bam_corr_avg_season-ref_avg_season)) %>% 
   filter(complete.cases(.))
 
+
+
+chilbEqFullSeasons <- chilbBAMEQ %>% 
+  rename(deltadelta = deltadelta_entire)
+
+test <- eqMVRLoc(locEq = chilbEqFullSeasons, 
+                 locBox = chilb, 
+                 DATES= dateMat, 
+                 TAG = "BAM-totalMean")
+
+
+
+chilbSeasonAvg <- chilbBAMEQ %>% 
+  rename(deltadelta = deltadeltaSeason)
+
+
+test2<-   eqMVRLoc(locEq = chilbSeasonAvg,
+                   locBox = chilb, 
+                   DATES= dateMat, 
+                   TAG = "BAM-seasonalMean")
 
 
 
