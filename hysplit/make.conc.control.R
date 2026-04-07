@@ -5,7 +5,7 @@
 # at http://www.meteozone.com/home/tutorial/html/index.html
 
 
-
+library(ssh)
 library(xts)
 # We'll need:
 # Desired Times
@@ -13,29 +13,48 @@ library(xts)
 # Run lengths
 # Met files
 
-met.file.loc <- "D:/HYSPLIT/metfiles/" # HYSPLIT met file directory
-wd.hysplit <- "C:/HYSPLIT/working" # HYSPLIT working directory
+met.file.loc <- "/users/jh2949/scratch/hysplit/metfiles/" # location of metfiles on viking
+# met.file.loc <- "D:/HYSPLIT/metfiles/" # HYSPLIT met file directory on local machine
 
-sites <- as.data.frame(matrix(data = c(53.44,-2.21,"Manchester Air Quality Site",
-                                       52.45, -1.93, "Birmingham Super Site",
-                                       54.98, -1.61, "Newcastle Center",
-                                       55.95, -3.20, "Edinburgh Center",
-                                       54.60, -5.93, "Belfast Center",
-                                       51.48, -3.18, "Cardiff Center",
-                                       51.45, -0.04,  "London Super Site",
-                                       51.08, -4.10, "Barnstaple Center",
-                                       55.79, -3.24, "Auchencorth Moss",
-                                       51.15, -1.44, "Chilbolton Observatory",
-                                       52.61, 1.30, "Norwich Center",
-                                       53.75, -0.34, "Hull Center"),
-                              ncol=3,byrow=TRUE,dimnames = list(c(),c("lat","lon","loc"))))
+# As of 2025-08-06, we are going to start running hysplit from Vking.  To that
+# end, we will need to reference metfiles from the Viking directory:
+# 
+# session = ssh_connect("jh2949@viking.york.ac.uk")
+# met.file.list <- capture.output(ssh_exec_wait(session, command = paste0("ls ",viking.met.file.loc)))
+# ssh_disconnect(session)
+# met.file.list <- paste0(viking.met.file.loc,met.file.list[-length(met.file.list)]) # gives the names of metfiles, NOT directory locations
+# write.csv(met.file.list, "G:/My Drive/Experiments/DEFRA/viking.met.file.list.csv",
+#           quote = FALSE, row.names = FALSE)
+met.file.list <- as.vector(unlist(read.csv("G:/My Drive/Experiments/DEFRA/viking.met.file.list.csv")))
+
+
+
+wd.hysplit <- "C:/HYSPLIT/working" # HYSPLIT working directory on local machine
+wd.hysplit.viking <- "/users/jh2949/scratch/hysplit/locations"
+
+sites <- as.data.frame(matrix(data = c(53.44,-2.21,"Manchester Air Quality Site","maqs",
+                                       52.45, -1.93, "Birmingham Super Site","bss",
+                                       54.98, -1.61, "Newcastle Center","newcastle",
+                                       55.95, -3.20, "Edinburgh Center","edinburgh",
+                                       #54.60, -5.93, "Belfast Center","bc"
+                                       51.48, -3.18, "Cardiff Center","cardiff",
+                                       51.45, -0.04,  "London Super Site","lss",
+                                       #51.08, -4.10, "Barnstaple Center",
+                                       55.79, -3.24, "Auchencorth Moss","auchencorthmoss",
+                                       51.15, -1.44, "Chilbolton Observatory","chilb",
+                                       52.61, 1.30, "Norwich Center","norwc",
+                                       53.75, -0.34, "Hull Center","hull",
+                                       50.81, 0.27, "Eastbourne","eastbourne",
+                                       50.91, -1.40, "Southampton","southampton",
+                                       53.03, -2.18, "Stoke On Trent","stokeontrent",
+                                       50.37, -4.14, "Plymouth","plymouth",
+                                       51.46, 0.63, "Rochester Stoke","rochesterstoke"),
+                              ncol=4,byrow=TRUE,dimnames = list(c(),c("lat","lon","loc","code"))))
 
 
 sites$lat <- as.numeric(sites$lat)
 sites$lon <- as.numeric(sites$lon)
 
-
-sites = sites[1,]
 # GDAS Data Codes ---------------------------------------------------------
 
 
@@ -143,7 +162,7 @@ time.syntax <- function(TIMES){
 # VERT represents the vertical transport method.  Met files typially have this 
 # within them, so I just leave it at 0.  
 build.ctrl <- function(TIME.LOC, GPS, HEIGHTS=10, RT=-72, VERT=0, BL.height = 1000, 
-                       WD = wd.hysplit){
+                       WD = wd.hysplit, VIKING, CODE){
   gps <- GPS[1:2]
   gps$lat <- round(as.numeric(gps$lat), 2)
   gps$lon <- round(as.numeric(gps$lon), 2)
@@ -168,8 +187,12 @@ build.ctrl <- function(TIME.LOC, GPS, HEIGHTS=10, RT=-72, VERT=0, BL.height = 10
     
   # Need to determine which met files we need.
   traj.et <- traj.st - as.difftime(-RT,units="hours")
-  met.file.list <- list.files(met.file.loc)
   
+  if(VIKING == FALSE){
+    met.file.list <- list.files(met.file.loc)
+  }else{
+    met.file.list <- basename(met.file.list)
+  }
   
   # Because the met files are discriminated by weeks, it is important to 
   # only select the necessary met files so HYSPLIT doesn't over-burden itself
@@ -204,7 +227,9 @@ build.ctrl <- function(TIME.LOC, GPS, HEIGHTS=10, RT=-72, VERT=0, BL.height = 10
                # "0.0 0.0", # center of lat /lon
                # "0.25 0.25", # grid spacing
                # "30.0 180", # grid span from starting loc
-               paste(WD,"/",sep=""), # output dir
+               ifelse(VIKING == FALSE,
+                      paste0(WD,"/"),
+                      paste0(wd.hysplit.viking,"/",CODE,"/bin")),# output dir
                paste("tback-",NAME,sep=""))), # conc output filename
                # "1", # no of vertical levels
                # "50", #averaging height, i.e. 0-Xm where x is the top of the avg height
@@ -224,9 +249,9 @@ build.ctrl <- function(TIME.LOC, GPS, HEIGHTS=10, RT=-72, VERT=0, BL.height = 10
 
 
 projTimes <- seq(from=as.POSIXct("2015-01-04 00:00:00",tz="UTC"), 
-                      to = as.POSIXct("2024-12-31 12:00:00",tz="UTC"), by="3 hours")
+                      to = as.POSIXct("2024-12-31 12:00:00",tz="UTC"), by="12 hours")
 
-make.ctrl.files <- function(LOC = sites, TIMES = projTimes){
+make.ctrl.files <- function(LOC = sites, TIMES = projTimes, VIKING = TRUE){
 
   # Now we should load the file and create vectors of the start and stop times:
   # st <- TIMES[1]
@@ -246,20 +271,30 @@ make.ctrl.files <- function(LOC = sites, TIMES = projTimes){
 
     # ed <- file.path(wd.hysplit,LOC,YEAR,ix) # ed for "event directory"
     ed <- file.path(wd.hysplit,"trajectories") # ed for "event directory"
-    cd <- file.path(ed,"control")
-    bd <- file.path(ed, "bin")
-    pd <- file.path(ed, "particle")
-    plot.d <- file.path(ed, "plot")
-    sapply(c(ed,cd,bd,pd, plot.d),dir.create,showWarnings=FALSE)
+    
+    locdir <- file.path(ed,LOC$code)
+    cd <- file.path(locdir,"control")
+    bd <- file.path(locdir, "bin")
+    pd <- file.path(locdir, "particle")
+    plot.d <- file.path(locdir, "plot")
+    sapply(c(locdir,ed,cd,bd,pd, plot.d),dir.create,showWarnings=FALSE)
     setwd(cd)
-    ctrl.list <- apply(ctrl.files,1,build.ctrl,GPS = gps, WD=bd)
+    ctrl.list <- apply(ctrl.files,1,build.ctrl,GPS = gps, WD=bd,
+                       VIKING = VIKING, CODE = LOC$code)
     setwd(wd.hysplit)
   #}
 
   return(ctrl.files)
 }
 
-
+# 
+for(ix in 2:nrow(sites)){
+  print(sites[ix,]$code)
+  make.ctrl.files(LOC = sites[ix,])
+}
+# 
+# 
+# 
 
 # TESTING -----------------------------------------------------------------
 
