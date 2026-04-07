@@ -238,6 +238,17 @@ kdep22 <- get.hcl.kdep()
 kdep22 <- get.hcl.kdep()
 write.csv(kdep22, "G:/My Drive/Experiments/OSCA/data/2022/kdep.csv",
           row.names=FALSE,quote = FALSE)
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
 
 # OLD ---------------------------------------------------------------------
 get.hcl.kdep <- function(TEMP = dfAnal$tempK,SA){
