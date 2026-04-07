@@ -1585,7 +1585,7 @@ grubbs.rowwise <- function(DF){
 #eqMVRLoc
 
 # DATES needs to be a 2 column matrix
-eqMVRLoc <- function(locEq, locBox, DATES = dateMat){
+eqMVRLoc <- function(locEq, locBox, DATES = dateMat,TAG){
   plotList <- list() # for output plot
   statsList <- list() # for R2
   outList <- list() # for model statistics
@@ -1791,8 +1791,9 @@ eqMVRLoc <- function(locEq, locBox, DATES = dateMat){
   
   # outPlot <- grid.arrange(grobs = plotList, ncol = 3)
   ggsave(paste0("G:/My Drive/Experiments/DEFRA/hysplit/seasonal_mvr/",
-                deparse(substitute(locEq)),"-nvrRemoved.png"),plot = plotOut,
+                deparse(substitute(locEq)),TAG,".png"),plot = plotOut,
          width = 12.8, height = 10.24, units = "in")
+  
   return(list(outputCombined, statsCombined, outVifCombined))
   #return(print(plotOut))
 }
