@@ -60,11 +60,11 @@ write.csv(capsDf, "G:/My Drive/Experiments/lab/clno2cal/2024lab/TILDAS-CIMS/ClNO
 
 #Note that data before August excluded a few data points, so I need to segregate
 # 
-
-#HRCIMSDIR <- "G:/My Drive/Experiments/lab/clno2cal/2024lab/TILDAS-CIMS/ClNO2/CIMS/iodide/Export"
+HRCIMSDIR <- "C:/Users/jh2949/OneDrive - University of York/Desktop/CIMS_analysis/HONO"
+HRCIMSDIR <- "G:/My Drive/Experiments/lab/clno2cal/2024lab/TILDAS-CIMS/ClNO2/CIMS/iodide/Export/20250113-withclno-p1"
 #HRCIMSDIR <- "G:/My Drive/Experiments/lab/clno2cal/2024lab/TILDAS-CIMS/ClNO2/CIMS/bromide/Export"
 
-HRCIMSDIR <- "C:/Users/jh2949/OneDrive - University of York/Desktop/CIMS_analysis/ClNO2/averaged-iodide/20240611"
+#HRCIMSDIR <- "C:/Users/jh2949/OneDrive - University of York/Desktop/CIMS_analysis/ClNO2/averaged-iodide/20250111-field"
 
 #HRCIMSDIR <- dir(HRCIMSDIR, pattern = "^[0-9]+$", full.names = TRUE, ignore.case = TRUE)
 
@@ -135,10 +135,11 @@ dfCims<- as_tibble(cbind(cimsTs, cimsData)) %>%
 #   mutate(brratio = ifelse(brratio>=1e-2,BrH2O / Br, NA)) %>%
 #   mutate(brratio = ifelse(brratio<=1.2,brratio, NA)) %>%
 #   mutate(clno2norm = ifelse(brratio<=1.05,clno2norm, NA))
-#  
-
-
-write.csv(dfCims,file.path(HRCIMSDIR, "I-caldata.csv"),
+# 
+# 
+write.csv(dfCims,file.path(HRCIMSDIR, "honocal.csv"),
+          quote = FALSE,row.names = FALSE)
+write.csv(dfCims,file.path(HRCIMSDIR, "I-fielddata.csv"),
           quote = FALSE,row.names = FALSE)
 # Nice job.  Let's now load the chemical data for merging.  The names
 # in the csv are not useful, so I will need to fix that.  
