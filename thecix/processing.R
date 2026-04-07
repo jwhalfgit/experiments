@@ -1,5 +1,5 @@
 load.tildas.data(START = "2023-07-31", STOP = "2023-08-21",
-                 STC = TRUE, HCLONLY= FALSE)
+                 STC = TRUE, HCLONLY= TRUE)
 
 dfAnal <- df.str %>% 
   left_join(df.stc)  %>% 
