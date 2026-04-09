@@ -93,6 +93,73 @@ read_smps_files <- function(FF,
 }
 
 
+# plot_smps_banana() ------------------------------------------------------
+# Creates a time series "banana plot" of SMPS size distributions.
+# x-axis: time; y-axis: diameter (nm, log scale); fill: dN/dlogDp.
+#
+# The y-axis is worked in log10(diameter) space so that geom_tile heights
+# fill the axis evenly regardless of bin spacing. Zeros are treated as NA
+# for the colour scale (log transform cannot handle zero).
+#
+# Arguments:
+#   smps_data   — output of read_smps_files()
+#   title       — optional plot title string
+#   na_colour   — colour for NA/zero cells (default "grey20")
+
+plot_smps_banana <- function(smps_data,
+                             title     = NULL,
+                             na_colour = "grey20",
+                             start     = NULL,
+                             end       = NULL) {
+
+  # Optional time filtering
+  if (!is.null(start)) smps_data <- smps_data %>% filter(datetime >= as.POSIXct(start, tz = "UTC"))
+  if (!is.null(end))   smps_data <- smps_data %>% filter(datetime <= as.POSIXct(end,   tz = "UTC"))
+
+  # Pivot to long, compute log10 diameter
+  long <- smps_data %>%
+    pivot_longer(cols      = -datetime,
+                 names_to  = "diameter",
+                 values_to = "conc") %>%
+    mutate(diameter = as.numeric(diameter),
+           log_diam = log10(diameter),
+           conc     = if_else(conc == 0, NA_real_, conc))
+
+  # Tile heights in log10 space: each bin spans half the gap to its neighbours
+  diams     <- sort(unique(long$diameter))
+  log_diams <- log10(diams)
+  n         <- length(diams)
+  tile_h    <- numeric(n)
+  tile_h[1] <- log_diams[2] - log_diams[1]
+  tile_h[n] <- log_diams[n] - log_diams[n - 1]
+  if (n > 2) tile_h[2:(n - 1)] <- (log_diams[3:n] - log_diams[1:(n - 2)]) / 2
+
+  long <- long %>%
+    left_join(tibble(diameter = diams, tile_h = tile_h), by = "diameter")
+
+  # Tile width: median time step in seconds (POSIXct axis unit)
+  times  <- sort(unique(long$datetime))
+  dt_sec <- median(as.numeric(diff(times), units = "secs"))
+
+  # y-axis breaks at round diameters within the data range
+  candidate_breaks <- c(1, 3, 10, 30, 100, 300, 1000)
+  y_breaks <- candidate_breaks[candidate_breaks >= min(diams) &
+                                  candidate_breaks <= max(diams)]
+
+  ggplot(long, aes(x = datetime, y = log_diam, fill = conc)) +
+    geom_tile(aes(width = dt_sec, height = tile_h)) +
+    scale_y_continuous(breaks = log10(y_breaks), labels = y_breaks) +
+    scale_fill_viridis_c(
+      option   = "plasma",
+      trans    = "log10",
+      na.value = na_colour,
+      name     = "dN/dlogDp"
+    ) +
+    labs(title = title, x = NULL, y = "Diameter (nm)") +
+    theme_bw()
+}
+
+
 # plot_smps_conversion() --------------------------------------------------
 # Plots original vs. interpolated size distributions for a single row,
 # to visually verify the spline conversion.
