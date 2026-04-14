@@ -105,16 +105,26 @@ read_smps_files <- function(FF,
 #   smps_data   — output of read_smps_files()
 #   title       — optional plot title string
 #   na_colour   — colour for NA/zero cells (default "grey20")
+#   clim        — length-2 numeric vector c(min, max) for the colour scale.
+#                 Values outside this range are squished to the nearest limit
+#                 colour (not removed). Default NULL uses data range.
 
 plot_smps_banana <- function(smps_data,
                              title     = NULL,
                              na_colour = "grey20",
-                             start     = NULL,
-                             end       = NULL) {
+                             start     = "2024-01-01",
+                             end       = "2024-12-31",
+                             clim      = c(1e-5,500)) {
 
   # Optional time filtering
-  if (!is.null(start)) smps_data <- smps_data %>% filter(datetime >= as.POSIXct(start, tz = "UTC"))
-  if (!is.null(end))   smps_data <- smps_data %>% filter(datetime <= as.POSIXct(end,   tz = "UTC"))
+  if (!is.null(start)){ 
+    smps_data <- smps_data %>% 
+      filter(datetime >= as.POSIXct(start, tz = "UTC"))
+  }
+  if (!is.null(end)){
+    smps_data <- smps_data %>% 
+      filter(datetime <= as.POSIXct(end,   tz = "UTC"))
+  }
 
   # Pivot to long, compute log10 diameter
   long <- smps_data %>%
@@ -152,6 +162,8 @@ plot_smps_banana <- function(smps_data,
     scale_fill_viridis_c(
       option   = "plasma",
       trans    = "log10",
+      limits   = clim,
+      oob      = scales::squish,
       na.value = na_colour,
       name     = "dN/dlogDp"
     ) +
@@ -241,7 +253,7 @@ ff_baqsSMPS <- list.files(file.path(DATADIR, "baqs", "smps"),
 
 baqsSMPS <- read_smps_files(ff_baqsSMPS)
 
-plot_smps_conversion(ff_baqsSMPS)
+plot_smps_conversion(ff_baqsSMPS[4])
 
 ###########################################################################
 #
