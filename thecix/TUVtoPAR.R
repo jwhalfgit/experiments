@@ -92,11 +92,12 @@ obsPar2023 <- read.csv("G:/My Drive/Experiments/THECIX/Data/TUV/par2023.csv") %>
          jhno2 = jhno2Clear * abs(parDiff),
          jch2o1 = jch2o1Clear * abs(parDiff),
          jch2o2 = jch2o2Clear * abs(parDiff)) %>% 
-  filter(between(ts,ymd_hm("2023-08-01 00:00"),
-                 ymd_hm("2023-08-10 23:00")))
+  filter(between(ts,ymd_hm("2023-07-25 00:00"),
+                 ymd_hm("2023-08-21 23:00")))
 
   
-
+write.csv(obsPar2023, "G:/My Drive/Experiments/THECIX/jval_est.csv",
+          row.names = FALSE, quote = FALSE)
 
 aeromma <- read.csv("G:/My Drive/Experiments/THECIX/Data/TUV/20230804-aeromma.csv") %>% 
   mutate(Time = dmy_hms(Time)) %>% 
