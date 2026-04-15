@@ -3,10 +3,10 @@
 #
 # Outputs: baqsCPC, baqsSMPS, maqsCPC, maqsSMPS
 #
-# NOTE: unit difference between sites is preserved throughout —
-#   baqs SMPS values are particle number per bin (NOT dN/d(log Dp))
-#   maqs SMPS values are dN/d(log Dp)
-# Conversion is required before combining sites.
+# NOTE: both baqs and maqs SMPS values are in dN/d(log Dp).
+# The PN_ column prefix in baqs files is misleading — confirmed by comparing
+# row sums against CPC concentrations (naive sum ~40x too high, consistent
+# with summing dN/d(log Dp) without multiplying by Δ(log Dp) ≈ 0.031).
 
 
 # SMPS bin scale from 2025/2026 baqs files (96 bins, 1.04–964.66 nm) -----
@@ -30,14 +30,14 @@ SMPS_SCALE <- c(
 #
 # Handles two formats automatically:
 #   baqs  — columns named PN_<diam_nm>; first column is datetime (unnamed).
-#            Values are particle number per bin (NOT dN/d(log Dp)).
+#            Values are dN/d(log Dp) (despite the PN_ prefix).
 #   maqs  — columns named as plain numeric diameters (nm); column "datetime"
 #            is the timestamp; trailing summary-statistic columns are ignored.
 #            Values are dN/d(log Dp).
 #
-# NOTE: unit difference between sites is preserved — no conversion is applied.
-#       Rows with fewer than 4 valid bins are left as NA. Predictions outside
-#       a file's measured size range are left as NA.
+# Both formats are in dN/d(log Dp) — no unit conversion needed between sites.
+# Rows with fewer than 4 valid bins are left as NA. Predictions outside
+# a file's measured size range are left as NA.
 #
 # Arguments:
 #   FF        — character vector of CSV paths
@@ -51,7 +51,7 @@ read_smps_files <- function(FF,
 
   result <- vector("list", length(FF))
 
-  for (ix in seq_along(FF)) {
+  for (ix in 1:length(FF)) {
     df <- read_csv(FF[ix], show_col_types = FALSE)
 
     if (any(grepl("^PN_", names(df)))) {
@@ -75,7 +75,7 @@ read_smps_files <- function(FF,
     interp_mat <- matrix(NA_real_, nrow = nrow(data_mat), ncol = length(new_scale))
     colnames(interp_mat) <- new_scale
 
-    for (r in seq_len(nrow(data_mat))) {
+    for (r in 1:nrow(data_mat)) {
       row_vals <- as.numeric(data_mat[r, ])
       valid    <- !is.na(row_vals)
       n_valid  <- sum(valid)
@@ -104,7 +104,8 @@ ff_baqsCPC <- list.files(file.path(DATADIR, "baqs", "cpc"),
                          full.names = TRUE)
 
 baqsCPC <- lapply(ff_baqsCPC, read_csv) %>%
-  bind_rows()
+  bind_rows() %>% 
+  mutate(date = dmy_hm(date))
 
 
 ff_baqsSMPS <- list.files(file.path(DATADIR, "baqs", "smps"),
@@ -114,6 +115,19 @@ ff_baqsSMPS <- list.files(file.path(DATADIR, "baqs", "smps"),
 baqsSMPS <- read_smps_files(ff_baqsSMPS)
 
 
+# The below block was for checking whether the BAQS data were in dN/dlogDp form
+# and they appear to be so (i.e., summed SMPS >> CPC # concentration).
+############################################################################
+# baqsSMPSsum <- baqsSMPS %>% 
+#   mutate(partsum = select(., -c(1)) %>% rowSums(na.rm = TRUE))
+# 
+# 
+# dfMerge <- baqsSMPSsum %>% 
+#   left_join(baqsCPC)
+# 
+# plot(dfMerge$partsum, dfMerge$`conc (#/cm3)`, type = "p", pch = 19)
+# 
+############################################################################
 # MAQS (Manchester) -------------------------------------------------------
 # CPC: 1-minute resolution; two instrument models (CPC-3750, CPC-3772) with
 # overlapping periods — deduplication/instrument selection not yet applied.
@@ -122,15 +136,23 @@ ff_maqsCPC <- list.files(file.path(DATADIR, "maqs", "cpc"),
                          full.names = TRUE)
 
 maqsCPC <- lapply(ff_maqsCPC, read_csv) %>%
-  bind_rows()
+  bind_rows() %>% 
+  rename(date = datetime) %>% 
+  mutate(date = floor_date(date, unit = "1 hour")) %>% 
+  group_by(date) %>% 
+  summarize_all(mean,na.rm = TRUE)
 
 
-# SMPS: 5-minute resolution; values are dN/d(log Dp)
+# SMPS: 5-minute resolution
 ff_maqsSMPS <- list.files(file.path(DATADIR, "maqs", "smps"),
                           pattern = "maqs-SMPS",
                           full.names = TRUE)
 
-maqsSMPS <- read_smps_files(ff_maqsSMPS)
+maqsSMPS <- read_smps_files(ff_maqsSMPS) %>% 
+  rename(date = datetime) %>% 
+  mutate(date = floor_date(date, unit = "1 hour")) %>% 
+  group_by(date) %>% 
+  summarize_all(mean,na.rm = TRUE)
 
 
 # London Honor Oak Park ---------------------------------------------------
