@@ -72,14 +72,16 @@ read_smps_files <- function(FF,
     file_max <- max(diameters)
     in_range <- between(new_scale, file_min, file_max)
 
-    interp_mat <- matrix(NA_real_, nrow = nrow(data_mat), ncol = length(new_scale))
+    interp_mat <- matrix(NA_real_, 
+                         nrow = nrow(data_mat),
+                         ncol = length(new_scale))
     colnames(interp_mat) <- new_scale
 
     for (r in 1:nrow(data_mat)) {
       row_vals <- as.numeric(data_mat[r, ])
       valid    <- !is.na(row_vals)
       n_valid  <- sum(valid)
-      if (n_valid < 4) next
+      if (n_valid < 4){next}
 
       degFree <- min(40, n_valid - 1)
       fit     <- smooth.spline(diameters[valid], row_vals[valid],
@@ -98,61 +100,59 @@ read_smps_files <- function(FF,
 }
 
 
-# BAQS (Birmingham) -------------------------------------------------------
-ff_baqsCPC <- list.files(file.path(DATADIR, "baqs", "cpc"),
-                         pattern = "CPC",
-                         full.names = TRUE)
+# read_cpc_files() --------------------------------------------------------
+# Reads a vector of CPC CSV file paths and returns a standardised tibble
+# with columns: date (POSIXct UTC), conc (#/cm³).
+#
+# Handles two formats automatically:
+#   baqs — columns: date (DD/MM/YYYY HH:MM), conc (#/cm3), counts.
+#          Hourly resolution. No QC flags (all data passed through).
+#   maqs — columns: datetime (ISO), Conc (#/cc), qc_flags.
+#          1-minute resolution. Instrument model inferred from filename
+#          (CPC-3750 or CPC-3772).
+#
+# QC filtering: maqs rows with qc_flags != 1 are dropped.
+#
+# Instrument priority: when CPC-3750 and CPC-3772 observations share the
+# same timestamp, the CPC-3750 is kept and the CPC-3772 discarded.
+#
+# Arguments:
+#   FF — character vector of CSV file paths
 
-baqsCPC <- lapply(ff_baqsCPC, read_csv) %>%
-  bind_rows() %>% 
-  mutate(date = dmy_hm(date))
+read_cpc_files <- function(FF) {
 
+  result <- vector("list", length(FF))
 
-ff_baqsSMPS <- list.files(file.path(DATADIR, "baqs", "smps"),
-                          pattern = "SMPS",
-                          full.names = TRUE)
+  for(ix in 1:length(FF)){
+    df    <- read_csv(FF[ix], show_col_types = FALSE)
+    fname <- basename(FF[ix])
 
-baqsSMPS <- read_smps_files(ff_baqsSMPS)
+    if ("qc_flags" %in% names(df)) {
+      # maqs format
+      instrument <- if (grepl("3750", fname)) "CPC-3750" else "CPC-3772"
+      result[[ix]] <- df %>%
+        filter(qc_flags == 1) %>%
+        transmute(
+          date       = as.POSIXct(datetime, tz = "UTC"),
+          conc       = `Conc (#/cc)`,
+          instrument = instrument
+        )
+    } else {
+      # baqs format
+      result[[ix]] <- df %>%
+        transmute(
+          date       = dmy_hm(date),
+          conc       = `conc (#/cm3)`,
+          instrument = "baqs-CPC"
+        )
+    }
+  }
 
+  bind_rows(result) %>%
+    mutate(priority = if_else(instrument == "CPC-3750", 1L, 2L)) %>%
+    group_by(date) %>%
+    slice_min(priority, n = 1, with_ties = FALSE) %>%
+    ungroup() %>%
+    select(date, conc)
+}
 
-# The below block was for checking whether the BAQS data were in dN/dlogDp form
-# and they appear to be so (i.e., summed SMPS >> CPC # concentration).
-############################################################################
-# baqsSMPSsum <- baqsSMPS %>% 
-#   mutate(partsum = select(., -c(1)) %>% rowSums(na.rm = TRUE))
-# 
-# 
-# dfMerge <- baqsSMPSsum %>% 
-#   left_join(baqsCPC)
-# 
-# plot(dfMerge$partsum, dfMerge$`conc (#/cm3)`, type = "p", pch = 19)
-# 
-############################################################################
-# MAQS (Manchester) -------------------------------------------------------
-# CPC: 1-minute resolution; two instrument models (CPC-3750, CPC-3772) with
-# overlapping periods — deduplication/instrument selection not yet applied.
-ff_maqsCPC <- list.files(file.path(DATADIR, "maqs", "cpc"),
-                         pattern = "maqs-CPC",
-                         full.names = TRUE)
-
-maqsCPC <- lapply(ff_maqsCPC, read_csv) %>%
-  bind_rows() %>% 
-  rename(date = datetime) %>% 
-  mutate(date = floor_date(date, unit = "1 hour")) %>% 
-  group_by(date) %>% 
-  summarize_all(mean,na.rm = TRUE)
-
-
-# SMPS: 5-minute resolution
-ff_maqsSMPS <- list.files(file.path(DATADIR, "maqs", "smps"),
-                          pattern = "maqs-SMPS",
-                          full.names = TRUE)
-
-maqsSMPS <- read_smps_files(ff_maqsSMPS) %>% 
-  rename(date = datetime) %>% 
-  mutate(date = floor_date(date, unit = "1 hour")) %>% 
-  group_by(date) %>% 
-  summarize_all(mean,na.rm = TRUE)
-
-
-# London Honor Oak Park ---------------------------------------------------
