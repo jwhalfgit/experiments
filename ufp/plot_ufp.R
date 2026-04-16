@@ -129,10 +129,12 @@ plot_smps_conversion <- function(file_path,
                    source = "interpolated")
 
   ggplot() +
-    geom_point(data = orig,   aes(x = diameter, y = value, colour = source), size = 2) +
+    geom_point(data = orig,   aes(x = diameter, y = value, colour = source), 
+               size = 2) +
     geom_line( data = interp, aes(x = diameter, y = value, colour = source)) +
     scale_x_log10() +
-    scale_colour_manual(values = c("original" = "black", "interpolated" = "steelblue")) +
+    scale_colour_manual(values = c("original" = "black", 
+                                   "interpolated" = "steelblue")) +
     labs(
       title    = paste0("SMPS spline conversion — row ", row_index),
       subtitle = basename(file_path),
@@ -141,4 +143,24 @@ plot_smps_conversion <- function(file_path,
       colour   = NULL
     ) +
     theme_bw()
+}
+
+
+plot_cpc_ts <- function(cpc_data, start = NULL, end = NULL){
+  # perform time filtering
+  if(!is.null(start)){
+    cpc_data <- cpc_data %>% 
+      filter(date >= as.POSIXct(start, tz = "UTC"))
+  }
+  
+  if(!is.null(end)){
+    cpc_data <- cpc_data %>% 
+      filter(date <= as.POSIXct(end,   tz = "UTC"))
+  }
+
+  
+  ggplot()+
+    geom_line(data = cpc_data, aes(x = date, y= conc))
+  
+  
 }
