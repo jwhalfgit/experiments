@@ -131,3 +131,59 @@ cpc_ts_plot <- ggarrange(cpcTs, cpcBoxWhisk,nrow = 2, common.legend = TRUE,
 ggsave( file.path(PLOTDIR, "cpc_ts_plot.png"),plot = cpc_ts_plot,
        width = 12.8, height =10.76, units = "in", bg = "white")
 
+
+# SMPS number concentration -----------------------------------------------
+
+maqsSMPS_N <- smps_number_conc(maqsSMPS)
+baqsSMPS_N <- smps_number_conc(baqsSMPS)
+
+maqsSMPS_N_monthly <- maqsSMPS_N %>%
+  mutate(mo = floor_date(date, "month")) %>%
+  group_by(mo) %>%
+  summarize(date   = mean(mo),
+            concMean = mean(N, na.rm = TRUE),
+            concSd   = sd(N,   na.rm = TRUE))
+
+baqsSMPS_N_monthly <- baqsSMPS_N %>%
+  mutate(mo = floor_date(date, "month")) %>%
+  group_by(mo) %>%
+  summarize(date   = mean(mo),
+            concMean = mean(N, na.rm = TRUE),
+            concSd   = sd(N,   na.rm = TRUE))
+
+smps_N_monthly <- bind_rows(
+  mutate(maqsSMPS_N_monthly, site = "Manchester"),
+  mutate(baqsSMPS_N_monthly, site = "Birmingham")
+)
+
+smpsTs <- ggplot(smps_N_monthly, aes(x = date, y = concMean, colour = site, fill = site)) +
+  geom_ribbon(aes(ymin = concMean - concSd, ymax = concMean + concSd), alpha = 0.2, colour = NA) +
+  geom_line() +
+  scale_colour_manual(values = c("Manchester" = "steelblue", "Birmingham" = "tomato")) +
+  scale_fill_manual(  values = c("Manchester" = "steelblue", "Birmingham" = "tomato")) +
+  labs(x = NULL, y = "SMPS N (#/cm³)", colour = NULL, fill = NULL) +
+  theme_minimal() +
+  theme(text = element_text(size = 22))
+
+smpsBoxWhisk <- bind_rows(
+  mutate(maqsSMPS_N, site = "Manchester"),
+  mutate(baqsSMPS_N,  site = "Birmingham")
+) %>%
+  mutate(year_mo = as.Date(floor_date(date, "month"))) %>%
+  ggplot(aes(x = year_mo, y = N, colour = site, fill = site,
+             group = interaction(year_mo, site))) +
+  geom_boxplot(alpha = 0.3, outlier.shape = NA,
+               position = position_dodge(width = 20), width = 15) +
+  scale_x_date(date_breaks = "6 months", date_labels = "%b %Y") +
+  scale_colour_manual(values = c("Manchester" = "steelblue", "Birmingham" = "tomato")) +
+  scale_fill_manual(  values = c("Manchester" = "steelblue", "Birmingham" = "tomato")) +
+  labs(x = NULL, y = "SMPS N (#/cm³)", colour = NULL, fill = NULL) +
+  theme_minimal() +
+  theme(text = element_text(size = 22), axis.text.x = element_text(angle = 45, hjust = 1)) +
+  ylim(c(0, 40000))
+
+smps_ts_plot <- ggarrange(smpsTs, smpsBoxWhisk, nrow = 2, common.legend = TRUE,
+                          legend = "right")
+ggsave(file.path(PLOTDIR, "smps_ts_plot.png"), plot = smps_ts_plot,
+       width = 12.8, height = 10.76, units = "in", bg = "white")
+
