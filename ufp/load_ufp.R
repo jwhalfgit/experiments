@@ -129,7 +129,11 @@ read_cpc_files <- function(FF) {
 
     if ("qc_flags" %in% names(df)) {
       # maqs format
-      instrument <- if (grepl("3750", fname)) "CPC-3750" else "CPC-3772"
+      instrument <- if (grepl("3750", fname)){ 
+          "CPC-3750"
+        }else{ 
+          "CPC-3772"
+        }
       result[[ix]] <- df %>%
         filter(qc_flags == 1) %>%
         transmute(
@@ -142,7 +146,7 @@ read_cpc_files <- function(FF) {
       result[[ix]] <- df %>%
         transmute(
           date       = dmy_hm(date),
-          conc       = `conc (#/cm3)`,
+          conc       = `conc`,
           instrument = "baqs-CPC"
         )
     }
@@ -151,8 +155,50 @@ read_cpc_files <- function(FF) {
   bind_rows(result) %>%
     mutate(priority = if_else(instrument == "CPC-3750", 1L, 2L)) %>%
     group_by(date) %>%
-    slice_min(priority, n = 1, with_ties = FALSE) %>%
+    slice_min(priority, n = 1, with_ties = FALSE) %>% # selects the CPC-3750 in case there are dual observations
     ungroup() %>%
     select(date, conc)
 }
 
+
+# smps_number_conc() ------------------------------------------------------
+# Integrates dN/d(log Dp) across all size bins to give total particle number
+# concentration, comparable to a CPC measurement.
+#
+# Bin widths (Δlog Dp) are derived from the diameter midpoints by treating
+# bin edges as the geometric mean between adjacent midpoints, with the
+# outermost edges extrapolated symmetrically.
+#
+# Rows where all bins are NA return NA. Rows with some valid bins are
+# integrated over the available range only (partial coverage).
+#
+# Arguments:
+#   smps_data — tibble from read_smps_files() or a hourly-averaged equivalent
+#
+# Returns: tibble(date, N) where N is total number concentration (#/cm³)
+
+smps_number_conc <- function(smps_data) {
+
+  diameters <- as.numeric(names(smps_data)[-1])
+
+  # Bin edges in log10 space: geometric means between adjacent midpoints;
+  # outermost edges extrapolated by the same half-step as the nearest pair
+  logD         <- log10(diameters)
+  n          <- length(logD)
+  edges      <- numeric(n + 1)
+  edges[1]   <- logD[1] - (logD[2]   - logD[1])   / 2
+  edges[2:n] <- (logD[seq_len(n - 1)] + logD[2:n]) / 2
+  edges[n + 1] <- logD[n] + (logD[n] - logD[n - 1]) / 2
+  delta_logD   <- diff(edges)
+
+  data_mat <- as.matrix(smps_data[, -1])
+  all_na   <- apply(data_mat, 1, function(r){ all(is.na(r))})
+
+  # calculate the integral by
+  # 1:sweeping - by column, multiply the data by the delta_logD (change in diameter)
+  # 2: summing across the rows to 
+  N          <- rowSums(sweep(data_mat, 2, delta_logD, "*"), na.rm = TRUE)
+  N[all_na]  <- NA_real_
+
+  tibble(date = smps_data$date, N = N)
+}
