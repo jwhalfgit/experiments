@@ -34,6 +34,24 @@ dfAnal <- dfAnal %>%
                                   ymd_hm("2023-08-16 12:00"))&ValveW == 8,0)) 
 
 
+TIME1 <- ymd("2023-08-09")
+TIME2 <- ymd("2023-08-10")
+
+
+dfAnal0 <- dfAnal %>% 
+  filter(ValveW == 0) %>% 
+  filter(between(ts, TIME1,TIME2))
+
+dfAnal8 <- dfAnal %>% 
+  filter(ValveW == 8) %>% 
+  filter(between(ts, TIME1,TIME2))
+
+
+ggplot()+
+  geom_point(data = dfAnal0, aes(x = ts, y = hcl), color = "red")+
+  geom_point(data = dfAnal8, aes(x = ts, y = hcl), color = "blue")+
+  ylim(c(-0.1,0.2))
+
 
 # This seems to have worked okay.  Now let's bg subtract
 # I'm not so sure what I want to do with overblow data yet.  
@@ -74,13 +92,17 @@ dfAnal$flag[valveChangeixTail] <- 1
 
 str.xts <- xts(x = dfAnal[2:6], order.by = dfAnal$ts)
 stc.xts <- xts(x = dfAnal[c("ValveW","flag")], order.by = dfAnal$ts)
-head(x)
+
 
 
 offset.correct()
 x<-offset.correct(just.zero = TRUE)
 y <- split.groups(x)
 z <- y[lengths(y) < 150]
+
+
+write.zoo(x, "G:/My Drive/Experiments/THECIX/overblowbg.csv",row.names = FALSE,
+          quote = FALSE,sep=",")
 
 sigmaVector <- sapply(z, sd, na.rm = TRUE)
 
@@ -110,7 +132,7 @@ cal9 <- dfAnalCorr %>%
   select(-id)
 
 cal25 <- dfAnalCorr %>% 
-  filter(ValveW == 25)
+  filter(ValveW == 25) %>% 
   mutate(id = floor_date(ts, unit = "10 minutes")) %>% 
   group_by(id) %>% 
   summarize_all(tail, n = 120) %>% 
@@ -215,7 +237,7 @@ dfAnalAvg <- dfAnalOut %>%
   group_by(ts) %>% 
   summarize(hcl = mean(hcl))
 
-write.csv(test,"G:/My Drive/Experiments/THECIX/hcl-foricartt.csv",
+write.csv(dfAnalAvg,"G:/My Drive/Experiments/THECIX/hcl-10minavg.csv",
           quote = FALSE,row.names = FALSE)
 
 metCix <- read_csv("G:/My Drive/Experiments/THECIX/Data/met/met.csv") %>% 
