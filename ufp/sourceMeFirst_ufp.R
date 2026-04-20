@@ -18,9 +18,9 @@ DATADIR <- switch(MYNAME,
                   "UOY21Y093" = "G:/My Drive/Experiments/DEFRA/ufp/data",
                   NULL) 
 
-DATADIR <- switch(MYNAME,
-                  "Computer" = "~/Documents/experiments/ufp/plot", 
-                  "UOY21Y093" = "G:/My Drive/Experiments/DEFRA/ufp/plot",
+PLOTDIR <- switch(MYNAME,
+                  "Computer" = "~/Documents/experiments/ufp/plots", 
+                  "UOY21Y093" = "G:/My Drive/Experiments/DEFRA/ufp/plots",
                   NULL) 
 
 
