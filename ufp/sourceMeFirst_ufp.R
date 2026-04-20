@@ -2,6 +2,7 @@
 # and data locations.
 
 library(tidyverse)
+library(ggpubr)
 
 Sys.setenv(TZ='UTC')
 
@@ -16,6 +17,12 @@ DATADIR <- switch(MYNAME,
                   "Computer" = "~/Documents/experiments/ufp/data", 
                   "UOY21Y093" = "G:/My Drive/Experiments/DEFRA/ufp/data",
                   NULL) 
+
+DATADIR <- switch(MYNAME,
+                  "Computer" = "~/Documents/experiments/ufp/plot", 
+                  "UOY21Y093" = "G:/My Drive/Experiments/DEFRA/ufp/plot",
+                  NULL) 
+
 
 setwd(ROOT)
 # Entry point: sources all component scripts in dependency order.
