@@ -35,7 +35,14 @@ s_margaAll <- read_csv(s_margaAll_ff) %>%
   left_join(dfMarga_all) %>% 
   mutate(pclFrac = (CLLIQ_umol/(CLLIQ_umol + GHCL_umol))/(pm25cl_umol/(hcl_umol+pm25cl_umol))) %>% 
   mutate(pno3Frac = (NO3LIQ_umol/(NO3LIQ_umol + GHNO3_umol))/(pm25no3_umol/(hno3_umol+pm25no3_umol))) %>% 
-  mutate(pnh4Frac = (NH4LIQ_umol/(NH4LIQ_umol + GNH3_umol))/(pm25nh4_umol/(nh3_umol+pm25nh4_umol)))
+  mutate(pnh4Frac = (NH4LIQ_umol/(NH4LIQ_umol + GNH3_umol))/(pm25nh4_umol/(nh3_umol+pm25nh4_umol))) %>% 
+  mutate(inorgSumObs = pm25nh4 + pm25no3+pm25cl + pm25so4 + pm25k + pm25ca,
+         inorgSumMod = NH4LIQ + NO3LIQ + CLLIQ + SO4LIQ + KLIQ + CaLIQ + NALIQ,
+         #orgWat = porg / WATER,
+         inorgObsWat = inorgSumObs / WATER,
+         inorgModWat = inorgSumMod / WATER,
+  )
+
 
 
 
@@ -140,3 +147,18 @@ ggsave("G:/My Drive/Experiments/OSCA/isorropia/wes/marga-ts-rh.png",
        width = 12.80,
        height = 10.24,
        units = "in")
+
+
+
+
+# Dry vs Wet aerosol ------------------------------------------------------
+ggplot(data = s_margaAll)+
+  geom_point(aes(x = inorgSumObs/(inorgSumObs + WATER), y = pclFrac,
+             color = as.factor(month(date))))+
+  theme_minimal()+
+  ylab("Cl Model Failure")+
+  xlab("Dry Inorg / (Dry Inorg + Water)")+
+  scale_y_continuous(trans = "log10", limits = c(1e-5,30))+
+  scale_x_continuous(trans = "log10")+
+  scale_color_viridis_d()
+
