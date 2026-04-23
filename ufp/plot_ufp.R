@@ -115,9 +115,8 @@ plot_smps_conversion <- function(file_path,
 
   row_vals <- as.numeric(data_mat[row_index, ])
   valid    <- !is.na(row_vals)
-  df_use   <- min(40, sum(valid) - 1)
   fit      <- smooth.spline(diameters[valid], row_vals[valid],
-                            spar = spar, df = df_use)
+                            spar = spar)
 
   in_range  <- new_scale >= min(diameters) & new_scale <= max(diameters)
   pred_vals <- rep(NA_real_, length(new_scale))
@@ -161,8 +160,8 @@ plot_cpc_ts <- function(cpc_data, start = NULL, end = NULL){
   }
 
   
-  ggplot()+
-    geom_line(data = cpc_data, aes(x = date, y= conc))
-  
-  
+  ggplot(cpc_data, aes(x = date, y = conc)) +
+    geom_line() +
+    labs(x = NULL, y = "Particle concentration (#/cm³)") +
+    theme_bw()
 }
