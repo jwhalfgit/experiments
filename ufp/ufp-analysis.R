@@ -38,7 +38,7 @@ load("baqsSMPS.Rds")
 
 # MAQS (Manchester) -------------------------------------------------------
 # CPC: 1-minute resolution; two instrument models (CPC-3750, CPC-3772) with
-# overlapping periods — deduplication/instrument selection not yet applied.
+# overlapping periods — CPC-3750 takes priority (handled in read_cpc_files()).
 ff_maqsCPC <- list.files(file.path(DATADIR, "maqs", "cpc"),
                          pattern = "maqs-CPC",
                          full.names = TRUE)
@@ -69,9 +69,9 @@ load("maqsSMPS.Rds")
 
 
 #############################################################################
-# we need to see how close together hte overlapping MAQS CPC data are:
-START = ymd("2022-09-01")
-END = ymd("2022-11-01")
+# we need to see how close together the overlapping MAQS CPC data are:
+START <- ymd("2022-09-01")
+END   <- ymd("2022-11-01")
 
 
 plot_cpc_ts(cpc_data = maqsCPC, start = START, end = END)
