@@ -51,7 +51,7 @@ read_smps_files <- function(FF,
 
   result <- vector("list", length(FF))
 
-  for (ix in 1:length(FF)) {
+  for (ix in seq_along(FF)) {
     df <- read_csv(FF[ix], show_col_types = FALSE)
 
     if (any(grepl("^PN_", names(df)))) {
@@ -77,15 +77,14 @@ read_smps_files <- function(FF,
                          ncol = length(new_scale))
     colnames(interp_mat) <- new_scale
 
-    for (r in 1:nrow(data_mat)) {
+    for (r in seq_len(nrow(data_mat))) {
       row_vals <- as.numeric(data_mat[r, ])
       valid    <- !is.na(row_vals)
       n_valid  <- sum(valid)
       if (n_valid < 4){next}
 
-      degFree <- min(40, n_valid - 1)
       fit     <- smooth.spline(diameters[valid], row_vals[valid],
-                               spar = spar, df = degFree)
+                               spar = spar)
       interp_mat[r, in_range] <- pmax(predict(fit, new_scale[in_range])$y, 0)
       # pmax(..., 0): spline predictions can be slightly negative on tails
     }
@@ -123,7 +122,7 @@ read_cpc_files <- function(FF) {
 
   result <- vector("list", length(FF))
 
-  for(ix in 1:length(FF)){
+  for(ix in seq_along(FF)){
     df    <- read_csv(FF[ix], show_col_types = FALSE)
     fname <- basename(FF[ix])
 
