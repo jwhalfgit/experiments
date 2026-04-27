@@ -11,59 +11,58 @@ source("sourceMeFirst_ufp.R")
 # BAQS (Birmingham) -------------------------------------------------------
 # Load BAQS SMPS and CPC
 
-ff_baqsCPC <- list.files(file.path(DATADIR, "baqs", "cpc"),
-                         pattern = "CPC",
-                         full.names = TRUE)
+ff_baqsCPC  <- find_site_files(file.path(DATADIR, "baqs", "cpc"),  pattern = "CPC")
+ff_baqsSMPS <- find_site_files(file.path(DATADIR, "baqs", "smps"), pattern = "SMPS")
 
-ff_baqsSMPS <- list.files(file.path(DATADIR, "baqs", "smps"),
-                          pattern = "SMPS",
-                          full.names = TRUE)
+baqsSMPS <- prep_smps_external(ff_baqsSMPS)
+
+
+sapply(names(baqsSMPS),
+       function(x){write.csv(baqsSMPS[[x]], 
+                             file = paste(x,"forPyNSD", "csv", sep = "."),,row.names = FALSE, quote = FALSE)})
+
+write.csv(baqsSMPS, file.path(DATADIR, "baqs", "smps", "baqs_smps.csv"),
+          row.names=FALSE,quote = FALSE)
 
 # baqsCPC <- read_cpc_files(ff_baqsCPC) %>%
 #   mutate(date = floor_date(date, unit = "1 hour")) %>%
-#   filter(complete.cases(.)) %>% 
+#   filter(complete.cases(.)) %>%
 #   group_by(date) %>%
-#   summarize_all(mean,na.rm = TRUE)
-# 
+#   summarize_all(mean, na.rm = TRUE)
+# write_working_csv(baqsCPC, file.path(DATADIR, "baqs", "cpc", "baqs_cpc.csv"))
 # save(baqsCPC, file = "baqsCPC.Rds")
-load("baqsCPC.Rds")
-
-
+#load("baqsCPC.Rds")
 
 # baqsSMPS <- read_smps_files(ff_baqsSMPS)
+# write_working_csv(baqsSMPS, file.path(DATADIR, "baqs", "smps", "baqs_smps.csv"))
 # save(baqsSMPS, file = "baqsSMPS.Rds")
-load("baqsSMPS.Rds")
+#load("baqsSMPS.Rds")
 
 
 
 # MAQS (Manchester) -------------------------------------------------------
 # CPC: 1-minute resolution; two instrument models (CPC-3750, CPC-3772) with
 # overlapping periods — CPC-3750 takes priority (handled in read_cpc_files()).
-ff_maqsCPC <- list.files(file.path(DATADIR, "maqs", "cpc"),
-                         pattern = "maqs-CPC",
-                         full.names = TRUE)
+ff_maqsCPC  <- find_site_files(file.path(DATADIR, "maqs", "cpc"),  pattern = "maqs-CPC")
 # SMPS: 5-minute resolution
-ff_maqsSMPS <- list.files(file.path(DATADIR, "maqs", "smps"),
-                          pattern = "maqs-SMPS",
-                          full.names = TRUE)
+ff_maqsSMPS <- find_site_files(file.path(DATADIR, "maqs", "smps"), pattern = "maqs-SMPS")
 
 # maqsCPC <- read_cpc_files(ff_maqsCPC) %>%
 #   mutate(date = floor_date(date, unit = "1 hour")) %>%
-#   filter(complete.cases(.)) %>% 
+#   filter(complete.cases(.)) %>%
 #   group_by(date) %>%
-#   summarize_all(mean,na.rm = TRUE)
+#   summarize_all(mean, na.rm = TRUE)
+# write_working_csv(maqsCPC, file.path(DATADIR, "maqs", "cpc", "maqs_cpc.csv"))
 # save(maqsCPC, file = "maqsCPC.Rds")
 load("maqsCPC.Rds")
 
 
 
-#
 # maqsSMPS <- read_smps_files(ff_maqsSMPS) %>%
-#   #rename(date = datetime) %>%
 #   mutate(date = floor_date(date, unit = "1 hour")) %>%
 #   group_by(date) %>%
-#   summarize_all(mean,na.rm = TRUE)
-#
+#   summarize_all(mean, na.rm = TRUE)
+# write_working_csv(maqsSMPS, file.path(DATADIR, "maqs", "smps", "maqs_smps.csv"))
 # save(maqsSMPS, file = "maqsSMPS.Rds")
 load("maqsSMPS.Rds")
 
