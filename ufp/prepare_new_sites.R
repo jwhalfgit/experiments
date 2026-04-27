@@ -12,6 +12,12 @@
 #   - Harwell_pc_Annual_2020_v01.xls is excluded (Harwell, not HOP).
 #   - "Honor Oak Park New SMPS 2023.txt" and "Marylebone Road New SMPS 2023.txt"
 #     excluded — same data as the 2023 xlsx files, less complete.
+#   - "2021 SMPS - 15min.txt" files contain full 51-bin SMPS distributions in
+#     UK-AIR long format; they are NOT CPC files. Use read_ukair_tab_smps() to
+#     extract SMPS data if needed (xls files already cover 2020-2022).
+#   - 2021 CPC for all three sites comes from unclassified/CPC 2021.txt (TNC
+#     parameter). All unclassified upload files are multi-site — always pass
+#     the station argument to read_upload_txt_cpc / read_upload_xlsx_cpc.
 #
 # HOP SMPS 2023 is split into two files because the bin structure changed:
 #   Jan-Feb  → 51 bins, 16.55–604 nm   (hop_smps_2023_jan_feb.csv)
@@ -34,10 +40,12 @@ read_pc_annual_cpc <- function(f) {
     filter(!is.na(date), !is.na(conc))
 }
 
-# UK-AIR tab-delimited CPC (PC_16_6).
-# Filters to PC_16_6 only — the mislabelled "2021 SMPS" txt files contain 51
-# size-bin parameters in long format; PC_16_6 is the total N above 16.6 nm,
-# equivalent to the CPC integrated measurement.
+# UK-AIR tab-delimited CPC (PC_16_6 parameter from _pc_Annual_ txt files).
+# These files contain only a single PC_16_6 parameter — total particle count
+# above 16.6 nm — which is a true CPC-equivalent measurement.
+# NOTE: the "2021 SMPS - 15min.txt" files are NOT the same format; they
+# contain 51 size-bin parameters (full SMPS distribution) and must be read
+# with read_ukair_tab_smps() instead.
 read_ukair_tab_cpc <- function(f) {
   df <- read_tsv(f, show_col_types = FALSE)
   df %>%
@@ -52,11 +60,38 @@ read_ukair_tab_cpc <- function(f) {
     filter(!is.na(date))
 }
 
-# measurement_upload txt CPC (unclassified/, TNC parameter, hourly).
-# The upload files cycle through the year multiple times (original + revisions),
-# so duplicate timestamps are resolved by taking the mean of valid measurements.
-read_upload_txt_cpc <- function(f) {
+# UK-AIR tab-delimited SMPS ("2021 SMPS - 15min.txt" files).
+# These are 51-bin size distributions in long format: one row per
+# timestamp × diameter bin. PC_xxx parameter names encode the diameter
+# midpoint in nm (underscores replace decimal points: PC_16_6 = 16.6 nm).
+# Pivots to wide format: date + one column per diameter midpoint.
+read_ukair_tab_smps <- function(f) {
   df <- read_tsv(f, show_col_types = FALSE)
+  df %>%
+    filter(Validity_id == 1, measurement != -9999) %>%
+    mutate(
+      date = parse_date_time(
+        paste(`measurement start date`, `measurement start time`),
+        orders = c("dmy HM", "dmy HMS"), tz = "UTC"
+      ),
+      diameter = as.numeric(gsub("_", ".", sub("^PC_", "", parameter_id)))
+    ) %>%
+    filter(!is.na(date), !is.na(diameter)) %>%
+    select(date, diameter, measurement) %>%
+    pivot_wider(names_from = diameter, values_from = measurement)
+}
+
+# measurement_upload txt CPC (unclassified/, TNC parameter, hourly).
+# All unclassified files are multi-site; use the station argument to filter
+# to a single site by its "Station name" value.
+# Duplicate timestamps (original + revisions) are resolved by taking the mean.
+#
+# station values: "London Marylebone Road", "London Honor Oak Park",
+#                 "Chilbolton Observatory"
+read_upload_txt_cpc <- function(f, station = NULL) {
+  df <- read_tsv(f, show_col_types = FALSE)
+  if (!is.null(station))
+    df <- filter(df, `Station name` == station)
   df %>%
     filter(Validity_id == 1, measurement != -9999) %>%
     transmute(
@@ -71,11 +106,14 @@ read_upload_txt_cpc <- function(f) {
     summarise(conc = mean(conc, na.rm = TRUE), .groups = "drop")
 }
 
-# measurement_upload xlsx CPC (unclassified/, for 2022 where no txt exists)
+# measurement_upload xlsx CPC (unclassified/, for 2022 where no txt exists).
+# All unclassified files are multi-site; use the station argument to filter.
 # readxl gives start date as POSIXct at midnight; start time as POSIXct at
 # 1899-12-31 + the actual time — combine by stripping each to its component.
-read_upload_xlsx_cpc <- function(f) {
+read_upload_xlsx_cpc <- function(f, station = NULL) {
   df <- read_excel(f, sheet = 1)
+  if (!is.null(station))
+    df <- filter(df, `Station name` == station)
   df %>%
     filter(Validity_id == 1, measurement != -9999) %>%
     transmute(
@@ -121,8 +159,10 @@ read_pc_annual_cpc(
   file.path(DATADIR, "chilbolton/Chilbolton_pc_Annual_2020_v01.xls")
 ) %>% write_site_csv(file.path(DATADIR, "chilbolton/cpc/chilbolton_cpc_2020.csv"))
 
-read_ukair_tab_cpc(
-  file.path(DATADIR, "chilbolton/smps/Chilbolton 2021 SMPS - 15min.txt")
+# 2021: unclassified upload (all three sites in one file)
+read_upload_txt_cpc(
+  file.path(DATADIR, "unclassified/CPC 2021.txt"),
+  station = "Chilbolton Observatory"
 ) %>% write_site_csv(file.path(DATADIR, "chilbolton/cpc/chilbolton_cpc_2021.csv"))
 
 # 2023 annual xlsx covers full year; Jan-Feb txt is a subset — use xlsx only
@@ -154,8 +194,10 @@ read_smps_excel(
 message("\n── HOP CPC")
 # Note: Harwell_pc_Annual_2020_v01.xls skipped (Harwell site, not HOP)
 
-read_ukair_tab_cpc(
-  file.path(DATADIR, "hop/smps/Honor Oak Park 2021 SMPS - 15min.txt")
+# 2021: unclassified upload (all three sites in one file)
+read_upload_txt_cpc(
+  file.path(DATADIR, "unclassified/CPC 2021.txt"),
+  station = "London Honor Oak Park"
 ) %>% write_site_csv(file.path(DATADIR, "hop/cpc/hop_cpc_2021.csv"))
 
 read_pc_annual_cpc(
@@ -193,7 +235,8 @@ message("\n── Marylebone CPC")
 
 # 2019: only source is hourly unclassified upload
 read_upload_txt_cpc(
-  file.path(DATADIR, "unclassified/CPC 2019.txt")
+  file.path(DATADIR, "unclassified/CPC 2019.txt"),
+  station = "London Marylebone Road"
 ) %>% write_site_csv(file.path(DATADIR, "marylebone/cpc/marylebone_cpc_2019.csv"))
 
 # 2020: 15-min _pc_Annual_ preferred over hourly unclassified
@@ -201,14 +244,16 @@ read_pc_annual_cpc(
   file.path(DATADIR, "marylebone/Marylebone Road_pc_Annual_2020_v01.xls")
 ) %>% write_site_csv(file.path(DATADIR, "marylebone/cpc/marylebone_cpc_2020.csv"))
 
-# 2021: mislabelled SMPS txt is actually 15-min CPC, preferred over hourly
-read_ukair_tab_cpc(
-  file.path(DATADIR, "marylebone/smps/Marylebone road 2021 SMPS - 15min.txt")
+# 2021: unclassified upload (all three sites in one file)
+read_upload_txt_cpc(
+  file.path(DATADIR, "unclassified/CPC 2021.txt"),
+  station = "London Marylebone Road"
 ) %>% write_site_csv(file.path(DATADIR, "marylebone/cpc/marylebone_cpc_2021.csv"))
 
 # 2022: only source is hourly unclassified upload (xlsx only, no txt)
 read_upload_xlsx_cpc(
-  file.path(DATADIR, "unclassified/CPC 2022.xlsx")
+  file.path(DATADIR, "unclassified/CPC 2022.xlsx"),
+  station = "London Marylebone Road"
 ) %>% write_site_csv(file.path(DATADIR, "marylebone/cpc/marylebone_cpc_2022.csv"))
 
 # 2023: 15-min _pc_Annual_ preferred over hourly unclassified
