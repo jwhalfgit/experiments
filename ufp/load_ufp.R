@@ -64,7 +64,8 @@ read_smps_files <- function(FF,
       # maqs format: size-bin columns have purely numeric names
       bin_cols  <- names(df)[!is.na(suppressWarnings(as.numeric(names(df))))]
       diameters <- as.numeric(bin_cols)
-      date      <- as.POSIXct(df$datetime, tz = "UTC")
+      date_col  <- if ("datetime" %in% names(df)) df$datetime else df$date
+      date      <- as.POSIXct(date_col, tz = "UTC")
       data_mat  <- as.matrix(df[, bin_cols])
     }
 
@@ -128,9 +129,9 @@ read_cpc_files <- function(FF) {
 
     if ("qc_flags" %in% names(df)) {
       # maqs format
-      instrument <- if (grepl("3750", fname)){ 
+      instrument <- if (grepl("3750", fname)){
           "CPC-3750"
-        }else{ 
+        }else{
           "CPC-3772"
         }
       result[[ix]] <- df %>%
@@ -140,13 +141,21 @@ read_cpc_files <- function(FF) {
           conc       = `Conc (#/cc)`,
           instrument = instrument
         )
-    } else {
-      # baqs format
+    } else if ("counts" %in% names(df)) {
+      # baqs format: date is DD/MM/YYYY HH:MM string
       result[[ix]] <- df %>%
         transmute(
           date       = dmy_hm(date),
           conc       = `conc`,
           instrument = "baqs-CPC"
+        )
+    } else {
+      # new-site format (chilbolton, hop, marylebone): date is ISO UTC string
+      result[[ix]] <- df %>%
+        transmute(
+          date       = as.POSIXct(date, tz = "UTC"),
+          conc       = conc,
+          instrument = "site-CPC"
         )
     }
   }
@@ -200,4 +209,38 @@ smps_number_conc <- function(smps_data) {
   N[all_na]  <- NA_real_
 
   tibble(date = smps_data$date, N = N)
+}
+
+
+# find_site_files() -----------------------------------------------------------
+# Locates CSV files for a site/instrument directory, preferring the main
+# folder and falling back to a raw/ subfolder if the main folder has no CSVs.
+#
+# Arguments:
+#   dir     — path to the site instrument directory (e.g. data/baqs/cpc)
+#   pattern — optional regex passed to list.files (default: all CSVs)
+
+find_site_files <- function(dir, pattern = NULL) {
+  csv_pattern <- if (is.null(pattern)) "\\.csv$" else pattern
+  ff <- list.files(dir, pattern = csv_pattern, full.names = TRUE)
+  if (length(ff) == 0)
+    ff <- list.files(file.path(dir, "raw"), pattern = csv_pattern,
+                     full.names = TRUE)
+  ff
+}
+
+
+# write_working_csv() ---------------------------------------------------------
+# Writes a processed data frame (from read_smps_files or read_cpc_files) as
+# a CSV into its site folder, making the result available to external tools.
+#
+# Arguments:
+#   data — tibble to write
+#   path — destination file path (parent directory is created if absent)
+
+write_working_csv <- function(data, path) {
+  dir.create(dirname(path), recursive = TRUE, showWarnings = FALSE)
+  write_csv(data, path)
+  message("wrote ", nrow(data), " rows  →  ", path)
+  invisible(data)
 }
