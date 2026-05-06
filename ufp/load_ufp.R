@@ -9,11 +9,9 @@
 # with summing dN/d(log Dp) without multiplying by Δ(log Dp) ≈ 0.031).
 
 
-# SMPS bin scale from 2025/2026 baqs files (96 bins, 1.04–964.66 nm) -----
+# SMPS bin scale from 2025/2026 baqs files, truncated to >= 10 nm (64 bins, 10.37–964.66 nm) -----
 SMPS_SCALE <- c(
-  1.04, 1.11, 1.2, 1.29, 1.38, 1.49, 1.6, 1.72, 1.84, 1.98, 2.13, 2.29,
-  2.46, 2.64, 2.84, 3.05, 3.28, 3.52, 3.79, 4.07, 4.37, 4.7, 5.05, 5.42,
-  5.83, 6.26, 6.73, 7.23, 7.77, 8.35, 8.98, 9.65, 10.37, 11.14, 11.97,
+  10.37, 11.14, 11.97,
   12.86, 13.82, 14.86, 15.96, 17.15, 18.43, 19.81, 21.29, 22.88, 24.58,
   26.42, 28.39, 30.51, 32.78, 35.23, 37.86, 40.68, 43.71, 46.98, 50.48,
   54.25, 58.29, 62.64, 67.32, 72.34, 77.74, 83.54, 89.77, 96.47, 103.66,
@@ -25,55 +23,98 @@ SMPS_SCALE <- c(
 
 
 # read_smps_files() -------------------------------------------------------
-# Reads a vector of SMPS CSV file paths and interpolates each row onto a
-# common diameter scale using smooth.spline.
+# Reads a vector of SMPS CSV file paths and returns a list of tibbles, one
+# per file. Each tibble has a `date` (POSIXct UTC) column followed by columns
+# named by diameter (nm) containing dN/d(log Dp) values at the original
+# instrument bin centres.
 #
-# Handles two formats automatically:
-#   baqs  — columns named PN_<diam_nm>; first column is datetime (unnamed).
-#            Values are dN/d(log Dp) (despite the PN_ prefix).
-#   maqs  — columns named as plain numeric diameters (nm); column "datetime"
-#            is the timestamp; trailing summary-statistic columns are ignored.
-#            Values are dN/d(log Dp).
+# Handles three formats automatically:
+#   baqs         — columns named PN_<diam_nm>; first column is the timestamp.
+#   maqs ratified — columns named as plain numeric diameters; "datetime" or
+#                   "date" is the timestamp.
+#   maqs raw AIM  — 52 metadata header rows; "DateTime Sample Start" column;
+#                   datetime as DD/MM/YYYY HH:MM:SS.
 #
-# Both formats are in dN/d(log Dp) — no unit conversion needed between sites.
-# Rows with fewer than 4 valid bins are left as NA. Predictions outside
-# a file's measured size range are left as NA.
+# All formats are in dN/d(log Dp) — no unit conversion needed between sites.
 #
 # Arguments:
-#   FF        — character vector of CSV paths
-#   new_scale — numeric vector of target diameter midpoints (nm);
-#               defaults to SMPS_SCALE (2025/2026 baqs bin structure)
-#   spar      — smoothing parameter passed to smooth.spline (default 0.1)
+#   FF — character vector of CSV paths
 
-read_smps_files <- function(FF,
-                            new_scale = SMPS_SCALE,
-                            spar = 0.1) {
+read_smps_files <- function(FF) {
 
   result <- vector("list", length(FF))
 
   for (ix in seq_along(FF)) {
-    df <- read_csv(FF[ix], show_col_types = FALSE)
+    first_line <- readLines(FF[ix], n = 1)
 
-    if (any(grepl("^PN_", names(df)))) {
-      # baqs format
-      bin_cols  <- grep("^PN_", names(df), value = TRUE)
-      diameters <- as.numeric(sub("^PN_", "", bin_cols))
-      date      <- as.POSIXct(df[[1]], tz = "UTC")
-      data_mat  <- as.matrix(df[, bin_cols])
-    } else {
-      # maqs format: size-bin columns have purely numeric names
+    if (grepl("AIM Version", first_line, ignore.case = TRUE)) {
+      # raw maqs AIM format: 52 metadata rows before column header
+      df        <- read_csv(FF[ix], skip = 52, show_col_types = FALSE)
       bin_cols  <- names(df)[!is.na(suppressWarnings(as.numeric(names(df))))]
       diameters <- as.numeric(bin_cols)
-      date_col  <- if ("datetime" %in% names(df)) df$datetime else df$date
-      date      <- as.POSIXct(date_col, tz = "UTC")
+      date      <- dmy_hms(df$`DateTime Sample Start`, tz = "UTC")
       data_mat  <- as.matrix(df[, bin_cols])
+    } else {
+      df <- read_csv(FF[ix], show_col_types = FALSE)
+
+      if (any(grepl("^PN_", names(df)))) {
+        # baqs format
+        bin_cols  <- grep("^PN_", names(df), value = TRUE)
+        diameters <- as.numeric(sub("^PN_", "", bin_cols))
+        date      <- as.POSIXct(df[[1]], tz = "UTC")
+        data_mat  <- as.matrix(df[, bin_cols])
+      } else {
+        # maqs ratified format: size-bin columns have purely numeric names
+        bin_cols  <- names(df)[!is.na(suppressWarnings(as.numeric(names(df))))]
+        diameters <- as.numeric(bin_cols)
+        date_col  <- if ("datetime" %in% names(df)) df$datetime else df$date
+        date      <- as.POSIXct(date_col, tz = "UTC")
+        data_mat  <- as.matrix(df[, bin_cols])
+      }
     }
+
+    keep      <- diameters >= 10
+    diameters <- diameters[keep]
+    data_mat  <- data_mat[, keep, drop = FALSE]
+
+    colnames(data_mat) <- as.character(diameters)
+    result[[ix]] <- bind_cols(tibble(date = date), as_tibble(data_mat))
+  }
+
+  result
+}
+
+
+# smps_interpolate() ------------------------------------------------------
+# Interpolates a list of SMPS tibbles (from read_smps_files()) onto a common
+# diameter scale using smooth.spline, then row-binds into a single tibble.
+#
+# Rows with fewer than 4 valid bins are left as NA. Predictions outside a
+# file's measured size range are left as NA.
+#
+# Arguments:
+#   smps_list — list of tibbles from read_smps_files()
+#   new_scale — numeric vector of target diameter midpoints (nm);
+#               defaults to SMPS_SCALE (2025/2026 baqs bin structure)
+#   spar      — smoothing parameter passed to smooth.spline (default 0.1)
+
+smps_interpolate <- function(smps_list,
+                             new_scale = SMPS_SCALE,
+                             spar = 0.1) {
+
+  result <- vector("list", length(smps_list))
+
+  for (ix in seq_along(smps_list)) {
+    df        <- smps_list[[ix]]
+    diameters <- as.numeric(names(df)[-1])
+    date      <- df$date
+    data_mat  <- as.matrix(df[, -1])
 
     file_min <- min(diameters)
     file_max <- max(diameters)
     in_range <- between(new_scale, file_min, file_max)
 
-    interp_mat <- matrix(NA_real_, 
+    interp_mat <- matrix(NA_real_,
                          nrow = nrow(data_mat),
                          ncol = length(new_scale))
     colnames(interp_mat) <- new_scale
@@ -81,22 +122,30 @@ read_smps_files <- function(FF,
     for (r in seq_len(nrow(data_mat))) {
       row_vals <- as.numeric(data_mat[r, ])
       valid    <- !is.na(row_vals)
-      n_valid  <- sum(valid)
-      if (n_valid < 4){next}
+      if (sum(valid) < 4) next
 
-      fit     <- smooth.spline(diameters[valid], row_vals[valid],
-                               spar = spar)
+      fit <- smooth.spline(diameters[valid], row_vals[valid], spar = spar)
       interp_mat[r, in_range] <- pmax(predict(fit, new_scale[in_range])$y, 0)
       # pmax(..., 0): spline predictions can be slightly negative on tails
     }
 
-    result[[ix]] <- bind_cols(
-      tibble(date = date),
-      as_tibble(interp_mat)
-    )
+    result[[ix]] <- bind_cols(tibble(date = date), as_tibble(interp_mat))
   }
 
-  bind_rows(result)
+  bind_rows(result) %>%
+    filter(if_any(-date, ~!is.na(.x))) %>%
+    group_by(date) %>%
+    summarise(across(everything(),
+                     ~{ 
+                       v <- .x[!is.na(.x)]; 
+                       if (length(v) == 0L){ 
+                         NA_real_
+                       }else{ 
+                         mean(v)
+                       }
+                       
+                    }),
+              .groups = "drop")
 }
 
 
@@ -104,17 +153,18 @@ read_smps_files <- function(FF,
 # Reads a vector of CPC CSV file paths and returns a standardised tibble
 # with columns: date (POSIXct UTC), conc (#/cm³).
 #
-# Handles two formats automatically:
-#   baqs — columns: date (DD/MM/YYYY HH:MM), conc (#/cm3), counts.
-#          Hourly resolution. No QC flags (all data passed through).
-#   maqs — columns: datetime (ISO), Conc (#/cc), qc_flags.
-#          1-minute resolution. Instrument model inferred from filename
-#          (CPC-3750 or CPC-3772).
+# Handles four formats automatically:
+#   baqs          — columns: date (DD/MM/YYYY HH:MM), conc, counts.
+#                   Hourly resolution.
+#   maqs ratified — columns: datetime (ISO), Conc (#/cc), qc_flags.
+#                   1-minute resolution. Rows with qc_flags != 1 are dropped.
+#   maqs raw      — "CPC 3750 Data" first line; columns: Date (DD/MM/YYYY),
+#                   Time (HH:MM:SS), 3750_Conc_(#/cc). 1-second resolution,
+#                   averaged to 1-minute.
+#   new sites     — columns: date (ISO UTC), conc. No QC flags.
 #
-# QC filtering: maqs rows with qc_flags != 1 are dropped.
-#
-# Instrument priority: when CPC-3750 and CPC-3772 observations share the
-# same timestamp, the CPC-3750 is kept and the CPC-3772 discarded.
+# Instrument priority: when CPC-3750 and CPC-3772 share a timestamp,
+# the CPC-3750 is kept.
 #
 # Arguments:
 #   FF — character vector of CSV file paths
@@ -124,48 +174,62 @@ read_cpc_files <- function(FF) {
   result <- vector("list", length(FF))
 
   for(ix in seq_along(FF)){
-    df    <- read_csv(FF[ix], show_col_types = FALSE)
-    fname <- basename(FF[ix])
+    fname      <- basename(FF[ix])
+    first_line <- readLines(FF[ix], n = 1)
 
-    if ("qc_flags" %in% names(df)) {
-      # maqs format
-      instrument <- if (grepl("3750", fname)){
-          "CPC-3750"
-        }else{
-          "CPC-3772"
-        }
-      result[[ix]] <- df %>%
-        filter(qc_flags == 1) %>%
+    if (grepl("CPC.*Data", first_line, ignore.case = TRUE)) {
+      # maqs raw format: skip the instrument-name header line
+      result[[ix]] <- read_csv(FF[ix], skip = 1, show_col_types = FALSE) %>%
         transmute(
-          date       = as.POSIXct(datetime, tz = "UTC"),
-          conc       = `Conc (#/cc)`,
-          instrument = instrument
-        )
-    } else if ("counts" %in% names(df)) {
-      # baqs format: date is DD/MM/YYYY HH:MM string
-      result[[ix]] <- df %>%
-        transmute(
-          date       = dmy_hm(date),
-          conc       = `conc`,
-          instrument = "baqs-CPC"
-        )
+          date       = dmy_hms(paste(Date, Time), tz = "UTC"),
+          conc       = `3750_Conc_(#/cc)`,
+          instrument = "CPC-3750"
+        ) %>%
+        mutate(date = floor_date(date, "1 minute")) %>%
+        group_by(date, instrument) %>%
+        summarise(conc = mean(conc, na.rm = TRUE), .groups = "drop")
     } else {
-      # new-site format (chilbolton, hop, marylebone): date is ISO UTC string
-      result[[ix]] <- df %>%
-        transmute(
-          date       = as.POSIXct(date, tz = "UTC"),
-          conc       = conc,
-          instrument = "site-CPC"
-        )
+      df <- read_csv(FF[ix], show_col_types = FALSE)
+
+      if ("qc_flags" %in% names(df)) {
+        # maqs ratified format
+        instrument <- if (grepl("3750", fname)) "CPC-3750" else "CPC-3772"
+        result[[ix]] <- df %>%
+          filter(qc_flags == 1) %>%
+          transmute(
+            date       = as.POSIXct(datetime, tz = "UTC"),
+            conc       = `Conc (#/cc)`,
+            instrument = instrument
+          )
+      } else if ("counts" %in% names(df)) {
+        # baqs format: date is DD/MM/YYYY HH:MM string
+        result[[ix]] <- df %>%
+          transmute(
+            date       = dmy_hm(date),
+            conc       = conc,
+            instrument = "baqs-CPC"
+          )
+      } else {
+        # new-site format (chilbolton, hop, marylebone): date is ISO UTC string
+        result[[ix]] <- df %>%
+          transmute(
+            date       = as.POSIXct(date, tz = "UTC"),
+            conc       = conc,
+            instrument = "site-CPC"
+          )
+      }
     }
   }
 
-  bind_rows(result) %>%
-    mutate(priority = if_else(instrument == "CPC-3750", 1L, 2L)) %>%
-    group_by(date) %>%
-    slice_min(priority, n = 1, with_ties = FALSE) %>% # selects the CPC-3750 in case there are dual observations
-    ungroup() %>%
-    select(date, conc)
+  out <- bind_rows(result) %>%
+          mutate(priority = if_else(instrument == "CPC-3750", 1L, 2L)) %>%
+          group_by(date) %>%
+          slice_min(priority, n = 1, with_ties = FALSE) %>% # selects the CPC-3750 in case there are dual observations
+          ungroup() %>%
+          select(date, conc)
+        
+  
+  return(out)
 }
 
 
@@ -224,8 +288,12 @@ find_site_files <- function(dir, pattern = NULL) {
   csv_pattern <- if (is.null(pattern)) "\\.csv$" else pattern
   ff <- list.files(dir, pattern = csv_pattern, full.names = TRUE)
   if (length(ff) == 0)
-    ff <- list.files(file.path(dir, "raw"), pattern = csv_pattern,
-                     full.names = TRUE)
+    ff <- c(
+      list.files(file.path(dir, "ratified"), pattern = csv_pattern,
+                 full.names = TRUE),
+      list.files(file.path(dir, "raw"),      pattern = csv_pattern,
+                 full.names = TRUE)
+    )
   ff
 }
 
