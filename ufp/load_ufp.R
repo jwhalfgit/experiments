@@ -50,6 +50,7 @@ read_smps_files <- function(FF) {
     if (grepl("AIM Version", first_line, ignore.case = TRUE)) {
       # raw maqs AIM format: 52 metadata rows before column header
       df        <- read_csv(FF[ix], skip = 52, show_col_types = FALSE)
+      df        <- filter(df, `Detector Status` == "Normal Scan")
       bin_cols  <- names(df)[!is.na(suppressWarnings(as.numeric(names(df))))]
       diameters <- as.numeric(bin_cols)
       date      <- dmy_hms(df$`DateTime Sample Start`, tz = "UTC")
@@ -311,4 +312,50 @@ write_working_csv <- function(data, path) {
   write_csv(data, path)
   message("wrote ", nrow(data), " rows  →  ", path)
   invisible(data)
+}
+
+
+# check_col_names() -----------------------------------------------------------
+# Checks whether all CSV files in a directory share identical column names.
+#
+# Returns TRUE invisibly if all files match; otherwise prints a per-file
+# summary of differences and returns a named list of the differing files'
+# column name vectors.
+#
+# Arguments:
+#   dir — path to the directory containing CSV files
+
+check_col_names <- function(dir) {
+  files <- list.files(dir, pattern = "\\.csv$", full.names = TRUE)
+  if (length(files) == 0) stop("No CSV files found in: ", dir)
+
+  col_list <- lapply(files, function(f) {
+    names(read.csv(f, nrows = 0, check.names = FALSE))
+  })
+  names(col_list) <- basename(files)
+
+  ref <- col_list[[1]]
+  identical_to_ref <- vapply(col_list, function(x) identical(x, ref), logical(1))
+
+  if (all(identical_to_ref)) {
+    message("All ", length(files), " files have identical column names (", length(ref), " columns).")
+    return(invisible(TRUE))
+  }
+
+  n_differ <- sum(!identical_to_ref)
+  message(n_differ, " of ", length(files), " files differ from the first file's column names:")
+  message("  Reference: ", basename(files[1]))
+
+  differing <- col_list[!identical_to_ref]
+  for (nm in names(differing)) {
+    only_in_ref  <- setdiff(ref,            differing[[nm]])
+    only_in_this <- setdiff(differing[[nm]], ref)
+    col_delta    <- length(differing[[nm]]) - length(ref)
+    message("  ", nm,
+            "  [", length(differing[[nm]]), " cols, delta=", col_delta, "]",
+            if (length(only_in_ref))  paste0("  missing: ", paste(only_in_ref,  collapse = ", ")),
+            if (length(only_in_this)) paste0("  extra: ",   paste(only_in_this, collapse = ", ")))
+  }
+
+  invisible(differing)
 }
