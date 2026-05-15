@@ -44,7 +44,8 @@ prep_smps_external <- function(FF) {
     if (grepl("AIM Version", first_line, ignore.case = TRUE)) {
       # raw maqs AIM format: 52 metadata rows before the column header
       df       <- read_csv(FF[ix], skip = 52, show_col_types = FALSE)
-      df       <- filter(df, `Detector Status` == "Normal Scan")
+      df       <- filter(df, `Detector Status` == "Normal Scan") %>% 
+        filter(if_any(-date, ~. < 1e8)) # massive spike 9 April 2025 across lots of bins
       date_vec <- dmy_hms(df$`DateTime Sample Start`, tz = "UTC")
       is_maqs  <- TRUE
     } else {
