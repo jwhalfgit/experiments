@@ -1,149 +1,9 @@
 # prepare_new_sites.R
-# Reads raw data for Chilbolton, HOP, and Marylebone and writes standardised
-# CSVs matching the baqs/maqs format conventions:
+# Reads raw data for non-baqs/maqs sites and writes standardised CSVs:
 #   CPC  → date (POSIXct UTC), conc (#/cm³)
 #   SMPS → date (POSIXct UTC), [numeric diameter-midpoint bin columns, nm]
-#
-# Redundancy resolution:
-#   - _pc_Annual_ xlsx/xls (15-min) preferred over UK-AIR hourly/20-min uploads
-#     where both cover the same period.
-#   - _pc_Annual_ 2023 xlsx supersedes the Jan-Feb 2023 txt for Chilbolton/HOP.
-#   - Unclassified SMPS monthly uploads are excluded (not time series).
-#   - Harwell_pc_Annual_2020_v01.xls is excluded (Harwell, not HOP).
-#   - "Honor Oak Park New SMPS 2023.txt" and "Marylebone Road New SMPS 2023.txt"
-#     excluded — same data as the 2023 xlsx files, less complete.
-#   - "2021 SMPS - 15min.txt" files contain full 51-bin SMPS distributions in
-#     UK-AIR long format; they are NOT CPC files. Use read_ukair_tab_smps() to
-#     extract SMPS data if needed (xls files already cover 2020-2022).
-#   - 2021 CPC for all three sites comes from unclassified/CPC 2021.txt (TNC
-#     parameter). All unclassified upload files are multi-site — always pass
-#     the station argument to read_upload_txt_cpc / read_upload_xlsx_cpc.
-#
-# HOP SMPS 2023 is split into two files because the bin structure changed:
-#   Jan-Feb  → 51 bins, 16.55–604 nm   (hop_smps_2023_jan_feb.csv)
-#   Mar-Dec  → 122 bins, 10.18–~600 nm  (hop_smps_2023_mar_onwards.csv)
 
 source("sourceMeFirst_ufp.R")
-library(readxl)
-library(lubridate)
-
-
-# ── Helpers ───────────────────────────────────────────────────────────────────
-
-# _pc_Annual_ xls/xlsx: "15Min_Data" sheet → date, conc
-read_pc_annual_cpc <- function(f) {
-  df <- read_excel(f, sheet = "15Min_Data")
-  tibble(
-    date = as.POSIXct(df[[1]], tz = "UTC"),
-    conc = df[[2]]
-  ) %>%
-    filter(!is.na(date), !is.na(conc))
-}
-
-# UK-AIR tab-delimited CPC (PC_16_6 parameter from _pc_Annual_ txt files).
-# These files contain only a single PC_16_6 parameter — total particle count
-# above 16.6 nm — which is a true CPC-equivalent measurement.
-# NOTE: the "2021 SMPS - 15min.txt" files are NOT the same format; they
-# contain 51 size-bin parameters (full SMPS distribution) and must be read
-# with read_ukair_tab_smps() instead.
-read_ukair_tab_cpc <- function(f) {
-  df <- read_tsv(f, show_col_types = FALSE)
-  df %>%
-    filter(parameter_id == "PC_16_6", Validity_id == 1, measurement != -9999) %>%
-    transmute(
-      date = parse_date_time(
-        paste(`measurement start date`, `measurement start time`),
-        orders = c("dmy HM", "dmy HMS"), tz = "UTC"
-      ),
-      conc = measurement
-    ) %>%
-    filter(!is.na(date))
-}
-
-# UK-AIR tab-delimited SMPS ("2021 SMPS - 15min.txt" files).
-# These are 51-bin size distributions in long format: one row per
-# timestamp × diameter bin. PC_xxx parameter names encode the diameter
-# midpoint in nm (underscores replace decimal points: PC_16_6 = 16.6 nm).
-# Pivots to wide format: date + one column per diameter midpoint.
-read_ukair_tab_smps <- function(f) {
-  df <- read_tsv(f, show_col_types = FALSE)
-  df %>%
-    filter(Validity_id == 1, measurement != -9999) %>%
-    mutate(
-      date = parse_date_time(
-        paste(`measurement start date`, `measurement start time`),
-        orders = c("dmy HM", "dmy HMS"), tz = "UTC"
-      ),
-      diameter = as.numeric(gsub("_", ".", sub("^PC_", "", parameter_id)))
-    ) %>%
-    filter(!is.na(date), !is.na(diameter)) %>%
-    select(date, diameter, measurement) %>%
-    pivot_wider(names_from = diameter, values_from = measurement)
-}
-
-# measurement_upload txt CPC (unclassified/, TNC parameter, hourly).
-# All unclassified files are multi-site; use the station argument to filter
-# to a single site by its "Station name" value.
-# Duplicate timestamps (original + revisions) are resolved by taking the mean.
-#
-# station values: "London Marylebone Road", "London Honor Oak Park",
-#                 "Chilbolton Observatory"
-read_upload_txt_cpc <- function(f, station = NULL) {
-  df <- read_tsv(f, show_col_types = FALSE)
-  if (!is.null(station))
-    df <- filter(df, `Station name` == station)
-  df %>%
-    filter(Validity_id == 1, measurement != -9999) %>%
-    transmute(
-      date = parse_date_time(
-        paste(`measurement start date`, `measurement start time`),
-        orders = c("dmy HMS", "dmy HM"), tz = "UTC"
-      ),
-      conc = measurement
-    ) %>%
-    filter(!is.na(date)) %>%
-    group_by(date) %>%
-    summarise(conc = mean(conc, na.rm = TRUE), .groups = "drop")
-}
-
-# measurement_upload xlsx CPC (unclassified/, for 2022 where no txt exists).
-# All unclassified files are multi-site; use the station argument to filter.
-# readxl gives start date as POSIXct at midnight; start time as POSIXct at
-# 1899-12-31 + the actual time — combine by stripping each to its component.
-read_upload_xlsx_cpc <- function(f, station = NULL) {
-  df <- read_excel(f, sheet = 1)
-  if (!is.null(station))
-    df <- filter(df, `Station name` == station)
-  df %>%
-    filter(Validity_id == 1, measurement != -9999) %>%
-    transmute(
-      date = as.POSIXct(
-        format(`measurement start date`, "%Y-%m-%d"),
-        tz = "UTC"
-      ) + as.numeric(
-        difftime(`measurement start time`,
-                 as.POSIXct("1899-12-31", tz = "UTC"),
-                 units = "secs")
-      ),
-      conc = measurement
-    ) %>%
-    filter(!is.na(date)) %>%
-    group_by(date) %>%
-    summarise(conc = mean(conc, na.rm = TRUE), .groups = "drop")
-}
-
-# SMPS xls/xlsx ("Data" sheet): works for both old (2020-2022) and new (2023)
-# formats — both have Date/Time as col 1 and numeric diameter names for bins.
-# Drops Total, TNC-SMPS, and any empty/non-numeric columns.
-read_smps_excel <- function(f) {
-  df <- suppressWarnings(read_excel(f, sheet = "Data"))
-  bin_cols <- names(df)[!is.na(suppressWarnings(as.numeric(names(df))))]
-  bind_cols(
-    tibble(date = as.POSIXct(df[[1]], tz = "UTC")),
-    df[, bin_cols]
-  ) %>%
-    filter(!is.na(date))
-}
 
 write_site_csv <- function(df, path) {
   dir.create(dirname(path), recursive = TRUE, showWarnings = FALSE)
@@ -152,134 +12,127 @@ write_site_csv <- function(df, path) {
 }
 
 
-# ── Chilbolton CPC ────────────────────────────────────────────────────────────
-message("\n── Chilbolton CPC")
+# ── AURN 2000–2009 CPC ───────────────────────────────────────────────────────
+# Source: data/unclassified/CPC/AURN_CPC_DATA2000_2009.csv
+# Hourly data for 7 sites. Date column format: "YYYY-MM-DD HH".
+# Each site is split into its own cpc/ subfolder under data/<site>/.
+message("\n── AURN CPC 2000–2009")
 
-read_pc_annual_cpc(
-  file.path(DATADIR, "chilbolton/Chilbolton_pc_Annual_2020_v01.xls")
-) %>% write_site_csv(file.path(DATADIR, "chilbolton/cpc/chilbolton_cpc_2020.csv"))
+site_map <- tribble(
+  ~col,       ~folder,
+  "BIC_PN",   "bic",
+  "TYB_PN",   "tyb",
+  "HWL_PN",   "harwell",
+  "CHB_PN",   "chilbolton",
+  "LNK_PN",   "lincoln",
+  "LHP_PN",   "hop",
+  "LMR_PN",   "marylebone"
+)
 
-# 2021: unclassified upload (all three sites in one file)
-read_upload_txt_cpc(
-  file.path(DATADIR, "unclassified/CPC 2021.txt"),
-  station = "Chilbolton Observatory"
-) %>% write_site_csv(file.path(DATADIR, "chilbolton/cpc/chilbolton_cpc_2021.csv"))
+raw <- read_csv(
+  file.path(DATADIR, "unclassified", "beddows", "cpc", "AURN_CPC_DATA2000_2009.csv"),
+  show_col_types = FALSE
+) %>%
+  mutate(date = ymd_h(Date, tz = "UTC")) %>%
+  select(-Date)
 
-# 2023 annual xlsx covers full year; Jan-Feb txt is a subset — use xlsx only
-read_pc_annual_cpc(
-  file.path(DATADIR, "chilbolton/Chilbolton_pc_Annual_2023_v01.xlsx")
-) %>% write_site_csv(file.path(DATADIR, "chilbolton/cpc/chilbolton_cpc_2023.csv"))
+for (ix in seq_len(nrow(site_map))) {
+  col    <- site_map$col[ix]
+  folder <- site_map$folder[ix]
 
-
-# ── Chilbolton SMPS ───────────────────────────────────────────────────────────
-message("\n── Chilbolton SMPS")
-
-for (yr in 2020:2022) {
-  ff <- list.files(file.path(DATADIR, "chilbolton/smps"),
-                   pattern = as.character(yr), full.names = TRUE)
-  ff <- ff[grepl("\\.xls$", ff, ignore.case = TRUE)]
-  if (length(ff))
-    read_smps_excel(ff[1]) %>%
-      write_site_csv(file.path(
-        DATADIR, sprintf("chilbolton/smps/chilbolton_smps_%d.csv", yr)))
+  raw %>%
+    select(date, conc = all_of(col)) %>%
+    filter(!is.na(conc)) %>%
+    write_site_csv(file.path(DATADIR, folder, "cpc",
+                             paste0(folder, "_cpc_2000_2009.csv")))
 }
 
-# 2023: Jan-Feb only (51-bin format identical to 2020-2022)
-read_smps_excel(
-  file.path(DATADIR, "chilbolton/smps/SMPS_Size_Chilbolton_2023_Jan-Feb_v06.xlsx")
-) %>% write_site_csv(file.path(DATADIR, "chilbolton/smps/chilbolton_smps_2023.csv"))
+# ── AURN 2010–2020 CPC ───────────────────────────────────────────────────────
+# Source: data/unclassified/CPC/AURN_CPC_DATA2010_2020.csv
+# Hourly data. Row-number column at position 1; Date (DD/MM/YYYY) and Time
+# (HH:MM:SS) are separate columns. No BIC_PN. NAs are explicit "NA".
+message("\n── AURN CPC 2010–2020")
 
+site_map_2010 <- tribble(
+  ~col,       ~folder,
+  "TYB_PN",   "tyb",
+  "HWL_PN",   "harwell",
+  "CHB_PN",   "chilbolton",
+  "LNK_PN",   "lincoln",
+  "LHP_PN",   "hop",
+  "LMR_PN",   "marylebone"
+)
 
-# ── HOP CPC ───────────────────────────────────────────────────────────────────
-message("\n── HOP CPC")
-# Note: Harwell_pc_Annual_2020_v01.xls skipped (Harwell site, not HOP)
+raw_2010 <- read_csv(
+  file.path(DATADIR, "unclassified", "beddows", "cpc", "AURN_CPC_DATA2010_2020.csv"),
+  show_col_types = FALSE
+) %>%
+  mutate(date = dmy_hms(paste(Date, Time), tz = "UTC")) %>%
+  select(-`...1`, -Date, -Time)
 
-# 2021: unclassified upload (all three sites in one file)
-read_upload_txt_cpc(
-  file.path(DATADIR, "unclassified/CPC 2021.txt"),
-  station = "London Honor Oak Park"
-) %>% write_site_csv(file.path(DATADIR, "hop/cpc/hop_cpc_2021.csv"))
+for (ix in seq_len(nrow(site_map_2010))) {
+  col    <- site_map_2010$col[ix]
+  folder <- site_map_2010$folder[ix]
 
-read_pc_annual_cpc(
-  file.path(DATADIR, "hop/cpc/Honor Oak Park_pc_Annual_2023_v01.xlsx")
-) %>% write_site_csv(file.path(DATADIR, "hop/cpc/hop_cpc_2023.csv"))
-
-
-# ── HOP SMPS ─────────────────────────────────────────────────────────────────
-message("\n── HOP SMPS")
-
-for (yr in 2020:2022) {
-  ff <- list.files(file.path(DATADIR, "hop/smps"),
-                   pattern = as.character(yr), full.names = TRUE)
-  ff <- ff[grepl("\\.xls$", ff, ignore.case = TRUE)]
-  if (length(ff))
-    read_smps_excel(ff[1]) %>%
-      write_site_csv(file.path(
-        DATADIR, sprintf("hop/smps/hop_smps_%d.csv", yr)))
+  raw_2010 %>%
+    select(date, conc = all_of(col)) %>%
+    filter(!is.na(conc)) %>%
+    write_site_csv(file.path(DATADIR, folder, "cpc",
+                             paste0(folder, "_cpc_2010_2020.csv")))
 }
 
-# 2023: two files because the bin structure changed at the instrument swap
-read_smps_excel(
-  file.path(DATADIR, "hop/smps/SMPS_Size_Honor Oak Park_2023_Jan-Feb_v06.xlsx")
-) %>% write_site_csv(
-  file.path(DATADIR, "hop/smps/hop_smps_2023_jan_feb.csv"))
+# ── NPL CPC 2019–2023 ────────────────────────────────────────────────────────
+# Source: data/unclassified/npl/cpc/CPC <year>.txt
+# Tab-delimited, multi-site (Marylebone Road, Honor Oak Park, Chilbolton),
+# hourly. Start times are 00:00:01; floored to hour on output.
+# 2019/2020 overlap with Beddows confirmed as rounding-only (<0.02% mean
+# relative difference, max absolute 0.5 #/cm³) — same underlying AURN data.
+# CPC 2022 is a CSV (same columns, no leading zeros in date/time); handled
+# by the same reader via extension dispatch.
+message("\n── NPL CPC 2019–2023")
 
-read_smps_excel(
-  file.path(DATADIR, "hop/smps/SMPS_Size_Honor Oak Park_2023_Mar onwards_v01.xlsx")
-) %>% write_site_csv(
-  file.path(DATADIR, "hop/smps/hop_smps_2023_mar_onwards.csv"))
+npl_station_map <- tribble(
+  ~station_name,                ~folder,
+  "London Marylebone Road",     "marylebone",
+  "London Honor Oak Park",      "hop",
+  "Chilbolton Observatory",     "chilbolton"
+)
 
-
-# ── Marylebone CPC ────────────────────────────────────────────────────────────
-message("\n── Marylebone CPC")
-
-# 2019: only source is hourly unclassified upload
-read_upload_txt_cpc(
-  file.path(DATADIR, "unclassified/CPC 2019.txt"),
-  station = "London Marylebone Road"
-) %>% write_site_csv(file.path(DATADIR, "marylebone/cpc/marylebone_cpc_2019.csv"))
-
-# 2020: 15-min _pc_Annual_ preferred over hourly unclassified
-read_pc_annual_cpc(
-  file.path(DATADIR, "marylebone/Marylebone Road_pc_Annual_2020_v01.xls")
-) %>% write_site_csv(file.path(DATADIR, "marylebone/cpc/marylebone_cpc_2020.csv"))
-
-# 2021: unclassified upload (all three sites in one file)
-read_upload_txt_cpc(
-  file.path(DATADIR, "unclassified/CPC 2021.txt"),
-  station = "London Marylebone Road"
-) %>% write_site_csv(file.path(DATADIR, "marylebone/cpc/marylebone_cpc_2021.csv"))
-
-# 2022: only source is hourly unclassified upload (xlsx only, no txt)
-read_upload_xlsx_cpc(
-  file.path(DATADIR, "unclassified/CPC 2022.xlsx"),
-  station = "London Marylebone Road"
-) %>% write_site_csv(file.path(DATADIR, "marylebone/cpc/marylebone_cpc_2022.csv"))
-
-# 2023: 15-min _pc_Annual_ preferred over hourly unclassified
-read_pc_annual_cpc(
-  file.path(DATADIR, "marylebone/Marylebone Road_pc_Annual_2023_v01.xlsx")
-) %>% write_site_csv(file.path(DATADIR, "marylebone/cpc/marylebone_cpc_2023.csv"))
-
-
-# ── Marylebone SMPS ───────────────────────────────────────────────────────────
-message("\n── Marylebone SMPS")
-
-for (yr in 2020:2022) {
-  ff <- list.files(file.path(DATADIR, "marylebone/smps"),
-                   pattern = as.character(yr), full.names = TRUE)
-  ff <- ff[grepl("\\.xls$", ff, ignore.case = TRUE)]
-  if (length(ff))
-    read_smps_excel(ff[1]) %>%
-      write_site_csv(file.path(
-        DATADIR, sprintf("marylebone/smps/marylebone_smps_%d.csv", yr)))
+read_npl_cpc_txt <- function(f) {
+  reader <- if (grepl("\\.csv$", f, ignore.case = TRUE)) read_csv else read_tsv
+  reader(f, show_col_types = FALSE) %>%
+    filter(Validity_id == 1, measurement != -9999) %>%
+    transmute(
+      station_name = `Station name`,
+      date = floor_date(
+        dmy_hms(paste(`measurement start date`, `measurement start time`), tz = "UTC"),
+        "hour"
+      ),
+      conc = measurement
+    ) %>%
+    filter(!is.na(date))
 }
 
-# 2023: 122-bin format; "New SMPS 2023.txt" has same data but less complete
-read_smps_excel(
-  file.path(DATADIR,
-    "marylebone/smps/SMPS_Size_Marylebone Road_Annual_Ratified_2023_v01.xlsx")
-) %>% write_site_csv(
-  file.path(DATADIR, "marylebone/smps/marylebone_smps_2023.csv"))
+npl_files <- sort(list.files(
+  file.path(DATADIR, "unclassified", "npl", "cpc"),
+  pattern = "\\.(txt|csv)$", full.names = TRUE
+))
+
+for (f in npl_files) {
+  yr  <- regmatches(basename(f), regexpr("\\d{4}", basename(f)))
+  df  <- read_npl_cpc_txt(f)
+  message("  processing NPL CPC ", yr)
+
+  for (ix in seq_len(nrow(npl_station_map))) {
+    stn    <- npl_station_map$station_name[ix]
+    folder <- npl_station_map$folder[ix]
+
+    df %>%
+      filter(station_name == stn) %>%
+      select(date, conc) %>%
+      write_site_csv(file.path(DATADIR, folder, "cpc",
+                               paste0(folder, "_cpc_", yr, ".csv")))
+  }
+}
 
 message("\nDone.")
