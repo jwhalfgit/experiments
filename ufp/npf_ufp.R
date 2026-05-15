@@ -34,7 +34,8 @@
 find_modes_spectrum <- function(diameters, concentrations,
                                 half_window    = 3,
                                 min_conc       = 1,
-                                min_prominence = 0) {
+                                min_prominence = 0,
+                                top_n          = NULL) {
 
   empty <- tibble(mode_diam = numeric(), mode_conc = numeric(),
                   prominence = numeric())
@@ -76,9 +77,12 @@ find_modes_spectrum <- function(diameters, concentrations,
   }, numeric(1L))
 
   keep <- prom >= min_prominence
-  tibble(mode_diam  = d[peak_idx[keep]],
-         mode_conc  = cc[peak_idx[keep]],
-         prominence = prom[keep])
+  out  <- tibble(mode_diam  = d[peak_idx[keep]],
+                 mode_conc  = cc[peak_idx[keep]],
+                 prominence = prom[keep]) %>%
+          arrange(desc(prominence))
+  if (!is.null(top_n)) out <- slice_head(out, n = top_n)
+  out
 }
 
 
@@ -96,7 +100,8 @@ find_modes_spectrum <- function(diameters, concentrations,
 find_modes_timeseries <- function(smps_data,
                                   half_window    = 3,
                                   min_conc       = 1,
-                                  min_prominence = 0) {
+                                  min_prominence = 0,
+                                  top_n          = NULL) {
 
   if (nrow(smps_data) == 0L)
     return(tibble(date = as.POSIXct(character()),
@@ -110,7 +115,8 @@ find_modes_timeseries <- function(smps_data,
     modes <- find_modes_spectrum(diameters, conc,
                                  half_window    = half_window,
                                  min_conc       = min_conc,
-                                 min_prominence = min_prominence)
+                                 min_prominence = min_prominence,
+                                 top_n          = top_n)
     if (nrow(modes) > 0L) modes$date <- smps_data$date[[r]]
     modes
   }) %>%
@@ -301,4 +307,164 @@ detect_npf_events <- function(tracks,
       start_diam       = diam_start,
       end_diam         = diam_end
     )
+}
+
+
+# fit_lognormals() --------------------------------------------------------
+# Deconvolutes a single SMPS size distribution by fitting a mixture of
+# log-normal modes via nonlinear least squares (L-BFGS-B).
+#
+# Each mode is parameterised as:
+#   dN/dlog10(Dp) = (N / (sqrt(2π) · log10(σ_g)))
+#                   · exp(−½ · ((log10(Dp) − log10(Dp_g)) / log10(σ_g))²)
+# where N is the total number concentration (cm⁻³), Dp_g the geometric
+# mean diameter (nm), and σ_g the geometric standard deviation.
+#
+# Initial guesses for mode centres come from find_modes_spectrum(); the
+# number of modes to try increases from 1 up to max_modes. AIC selects
+# the best fit. Falls back to fewer modes if optimisation fails.
+#
+# Arguments:
+#   diameters      — numeric vector of bin midpoints (nm)
+#   concentrations — numeric vector of dN/dlog10(Dp) values (same length)
+#   max_modes      — maximum number of log-normal components to fit (default 3)
+#   min_conc       — minimum peak concentration passed to find_modes_spectrum()
+#   min_sigma      — lower bound for σ_g (default 1.05)
+#   max_sigma      — upper bound for σ_g (default 3.0)
+#
+# Returns: tibble(mode, Dpg_nm, sigma_g, N_percm3) sorted by Dpg_nm;
+#          zero-row tibble if no fit converges.
+
+fit_lognormals <- function(diameters, concentrations,
+                           max_modes = 3,
+                           min_conc  = 1,
+                           min_sigma = 1.05,
+                           max_sigma = 3.0) {
+
+  empty <- tibble(mode = integer(), Dpg_nm = numeric(),
+                  sigma_g = numeric(), N_percm3 = numeric(),
+                  convergence = integer())
+
+  ord  <- order(diameters)
+  d    <- diameters[ord]
+  cc   <- concentrations[ord]
+  cc[is.na(cc) | cc < 0] <- 0
+
+  if (sum(cc > min_conc) < 4L) return(empty)
+
+  logDp     <- log10(d)
+  lpg_min   <- log10(min(d))
+  lpg_max   <- log10(max(d))
+  lsg_min   <- log10(min_sigma)
+  lsg_max   <- log10(max_sigma)
+
+  # Predicted dN/dlog10Dp from a packed parameter vector
+  lognorm_mixture <- function(logDp, pars) {
+    k    <- length(pars) %/% 3L
+    pred <- numeric(length(logDp))
+    for (i in seq_len(k)) {
+      N   <- pars[3L * i - 2L]
+      lpg <- pars[3L * i - 1L]
+      lsg <- pars[3L * i]
+      pred <- pred + (N / (sqrt(2 * pi) * lsg)) *
+                     exp(-0.5 * ((logDp - lpg) / lsg)^2)
+    }
+    pred
+  }
+
+  obj <- function(pars) sum((cc - lognorm_mixture(logDp, pars))^2)
+
+  # Seed guesses from prominence-ranked peaks
+  seed_modes <- find_modes_spectrum(d, cc, min_conc = min_conc) %>%
+    arrange(desc(prominence))
+
+  best_result <- NULL
+  best_aic    <- Inf
+
+  for (k in seq_len(min(max_modes, max(1L, nrow(seed_modes))))) {
+
+    # Build initial parameter vector [N, log10(Dpg), log10(sigma_g)] × k
+    pars0 <- numeric(3L * k)
+    for (i in seq_len(k)) {
+      row_i <- if (i <= nrow(seed_modes)) i else nrow(seed_modes)
+      sg0   <- 1.5
+      pars0[3L * i - 2L] <- seed_modes$mode_conc[row_i] * sqrt(2 * pi) * log10(sg0)
+      pars0[3L * i - 1L] <- log10(seed_modes$mode_diam[row_i])
+      pars0[3L * i]      <- log10(sg0)
+    }
+
+    lower <- rep(c(0,       lpg_min, lsg_min), k)
+    upper <- rep(c(1e9,     lpg_max, lsg_max), k)
+
+    fit <- tryCatch(
+      optim(pars0, obj, method = "L-BFGS-B",
+            lower = lower, upper = upper,
+            control = list(maxit = 1000L, factr = 1e7)),
+      error = function(e) NULL
+    )
+
+    if (is.null(fit) || fit$convergence != 0L) next
+
+    # AIC with 3k free parameters plus the implicit noise variance
+    n   <- sum(cc > 0)
+    rss <- fit$value
+    aic <- if (rss > 0) n * log(rss / n) + 2 * (3L * k + 1L) else -Inf
+
+    if (aic < best_aic) {
+      best_aic    <- aic
+      best_result <- list(pars = fit$par, k = k, convergence = fit$convergence)
+    }
+  }
+
+  if (is.null(best_result)) return(empty)
+
+  pars <- best_result$pars
+  k    <- best_result$k
+
+  tibble(
+    mode        = seq_len(k),
+    Dpg_nm      = 10^pars[seq(2L, 3L * k, 3L)],
+    sigma_g     = 10^pars[seq(3L, 3L * k, 3L)],
+    N_percm3    = pars[seq(1L, 3L * k, 3L)],
+    convergence = best_result$convergence
+  ) %>%
+    arrange(Dpg_nm) %>%
+    mutate(mode = seq_len(k))
+}
+
+
+# fit_lognormals_timeseries() ---------------------------------------------
+# Applies fit_lognormals() row-by-row to an smps_data tibble.
+#
+# Arguments:
+#   smps_data — tibble from read_smps_files() (col 1: date; remaining cols
+#               named by diameter in nm containing dN/dlog10(Dp) values)
+#   max_modes, min_conc, min_sigma, max_sigma — forwarded to fit_lognormals()
+#
+# Returns: tibble(date, mode, Dpg_nm, sigma_g, N_percm3)
+
+fit_lognormals_timeseries <- function(smps_data,
+                                      max_modes = 3,
+                                      min_conc  = 1,
+                                      min_sigma = 1.05,
+                                      max_sigma = 3.0) {
+
+  if (nrow(smps_data) == 0L)
+    return(tibble(date = as.POSIXct(character()), mode = integer(),
+                  Dpg_nm = numeric(), sigma_g = numeric(),
+                  N_percm3 = numeric()))
+
+  diameters <- as.numeric(names(smps_data)[-1])
+
+  map_dfr(seq_len(nrow(smps_data)), function(r) {
+    conc  <- as.numeric(unlist(smps_data[r, -1]))
+    modes <- fit_lognormals(diameters, conc,
+                            max_modes = max_modes,
+                            min_conc  = min_conc,
+                            min_sigma = min_sigma,
+                            max_sigma = max_sigma)
+    if (nrow(modes) > 0L) modes$date <- smps_data$date[[r]]
+    modes
+  }) %>%
+    select(date, mode, Dpg_nm, sigma_g, N_percm3, convergence)
 }
