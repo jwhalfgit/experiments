@@ -40,7 +40,7 @@ SMPS_SCALE <- c(
 # Arguments:
 #   FF — character vector of CSV paths
 
-read_smps_files <- function(FF) {
+read_smps_files <- function(FF, TIME_AVG = NULL) {
 
   result <- vector("list", length(FF))
 
@@ -79,14 +79,21 @@ read_smps_files <- function(FF) {
     data_mat  <- data_mat[, keep, drop = FALSE]
 
     colnames(data_mat) <- as.character(diameters)
-    result[[ix]] <- bind_cols(tibble(date = date), as_tibble(data_mat))
+    if(is.null(TIME_AVG)){
+      result[[ix]] <- bind_cols(tibble(date = date), as_tibble(data_mat))
+    }else{
+      result[[ix]] <- bind_cols(tibble(date = date), as_tibble(data_mat)) %>% 
+        mutate(date = floor_date(date, TIME_AVG)) %>% 
+        group_by(date) %>% 
+        summarize_all(mean,na.rm = TRUE)
+    }
   }
 
   result
 }
 
 
-# smps_interpolate() ------------------------------------------------------
+# smps_spline() ------------------------------------------------------
 # Interpolates a list of SMPS tibbles (from read_smps_files()) onto a common
 # diameter scale using smooth.spline, then row-binds into a single tibble.
 #
@@ -99,7 +106,7 @@ read_smps_files <- function(FF) {
 #               defaults to SMPS_SCALE (2025/2026 baqs bin structure)
 #   spar      — smoothing parameter passed to smooth.spline (default 0.1)
 
-smps_interpolate <- function(smps_list,
+smps_spline <- function(smps_list,
                              new_scale = SMPS_SCALE,
                              spar = 0.1) {
 
