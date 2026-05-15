@@ -158,33 +158,76 @@ ggsave(file.path(PLOTDIR, "smps_ts_plot.png"), plot = smps_ts_plot,
 
 
 # SMPS --------------------------------------------------------------------
-ff_baqsSMPS <- find_site_files(file.path(DATADIR, "baqs", "smps","raw"),
-                               pattern = "SMPS")
+# ff_baqsSMPS <- find_site_files(file.path(DATADIR, "baqs", "smps","raw"),
+#                                pattern = "SMPS")
+# 
+# baqsSMPSList <- read_smps_files(ff_baqsSMPS)
+# baqsSMPSdf <- smps_interpolate(baqsSMPSList,new_scale = SMPS_SCALE)
+# plot_smps_banana(baqsSMPSdf)
+# 
+# # write_working_csv(baqsSMPS, file.path(DATADIR, "baqs", "smps", "baqs_smps.csv"))
+# # save(baqsSMPS, file = "baqsSMPS.Rds")
+# #load("baqsSMPS.Rds")
+# 
+# baqsSMPS <- prep_smps_external(ff_baqsSMPS)
+# sapply(names(baqsSMPS),
+#        function(x){write.csv(baqsSMPS[[x]],
+#                              file = paste(x,"forPyNSD", "csv", sep = "."),
+#                              row.names = FALSE,
+#                              quote = FALSE)})
+# 
+# 
+# 
+# ff_maqsSMPS_raw <- find_site_files(file.path(DATADIR, "maqs", "smps","raw"),
+#                                pattern = "SMPS")
+# 
+# ff_maqsSMPS_rat <-  find_site_files(file.path(DATADIR, "maqs", "smps",
+#                                                    "ratified"),
+#                                          pattern = "SMPS")
+# 
 
-baqsSMPSList <- read_smps_files(ff_baqsSMPS)
-baqsSMPSdf <- smps_interpolate(baqsSMPSList,new_scale = SMPS_SCALE)
-plot_smps_banana(baqsSMPSdf)
+# We also want to include the raw SMPS data from MAQS provided by James Allan.
+# It has been QC'd
+# 
+# maqsSMPS_raw <- prep_smps_external(ff_maqsSMPS_raw) %>%
+#   bind_rows() %>% 
+#   write_csv("~/Documents/experiments/ufp/data/maqs/smps/forPyNSD/2023-2025_maqs_smps_raw.forPyNSD.csv")
+# 
+# 
+# maqsSMPS_raw %>%
+#   mutate(date = ymd_hms(date)) %>%
+#   #filter(between(date,ymd("2025-04-09"), ymd("2025-04-10"))) %>%
+#   #filter(!dates < 1e12) %>%
+#   ggplot()+
+#   geom_line(aes(x = ymd_hms(date), y = `32.20`))
+# 
+# 
+# maqsSMPS_rat <- prep_smps_external(ff_maqsSMPS_rat)
 
-# write_working_csv(baqsSMPS, file.path(DATADIR, "baqs", "smps", "baqs_smps.csv"))
-# save(baqsSMPS, file = "baqsSMPS.Rds")
-#load("baqsSMPS.Rds")
+# sapply(names(maqsSMPS_rat),
+#        function(x){write.csv(maqsSMPS_rat[[x]],
+#                              file = paste(x,"forPyNSD", "csv", sep = "."),
+#                              row.names = FALSE,
+#                              quote = FALSE)})
 
-baqsSMPS <- prep_smps_external(ff_baqsSMPS)
-sapply(names(baqsSMPS),
-       function(x){write.csv(baqsSMPS[[x]],
-                             file = paste(x,"forPyNSD", "csv", sep = "."),
-                             row.names = FALSE,
-                             quote = FALSE)})
 
 
 
 # SMPS: ratified 5-minute + raw AIM format
-ff_maqsSMPS <- find_site_files(file.path(DATADIR, "maqs", "smps", "raw"), 
-                               pattern = "SMPS")
-# maqsSMPS <- read_smps_files(ff_maqsSMPS) %>%
+ff_maqsSMPS <- find_site_files(file.path(DATADIR, "maqs", "smps", "forPyNSD"), 
+                               pattern = "forPyNSD")
+maqsSMPS <- read_smps_files(ff_maqsSMPS, TIME_AVG = "1 hour")
+maqsSMPS_splined <- smps_spline(maqsSMPS) # harmonize size bins
+
 #   mutate(date = floor_date(date, unit = "1 hour")) %>%
 #   group_by(date) %>%
 #   summarize_all(mean, na.rm = TRUE)
-# write_working_csv(maqsSMPS, file.path(DATADIR, "maqs", "smps", "maqs_smps.csv"))
-# save(maqsSMPS, file = "maqsSMPS.Rds")
-load("maqsSMPS.Rds")
+write_working_csv(maqsSMPS_splined, file.path(DATADIR, "maqs", "smps", "maqs_smps_R.csv"))
+save(maqsSMPS_splined, file = "maqsSMPS_splined.Rds")
+load("maqsSMPS_splined.Rds")
+
+plot_smps_banana(maqsSMPS_splined, show_NSD = TRUE, NSD_avg = "month")
+
+
+
+
