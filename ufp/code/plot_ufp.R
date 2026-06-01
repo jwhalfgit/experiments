@@ -29,6 +29,10 @@
 #   NSD_avg     — time-averaging unit for the NSD line, passed to lubridate::floor_date
 #               (e.g. "month", "week", "day", "hour"). Default "month". NULL disables
 #               averaging and plots every data point.
+#   nsd_range   — length-2 numeric c(min_nm, max_nm) restricting which bins
+#               contribute to the NSD integral. NULL (default) uses all non-NA
+#               bins. Use the intersection of all files' bin ranges for a site
+#               to make NSD comparable across bin-structure transitions.
 
 plot_smps_banana <- function(smps_data,
                              title     = NULL,
@@ -38,7 +42,8 @@ plot_smps_banana <- function(smps_data,
                              clim      = c(1, 1e6),
                              show_NSD    = FALSE,
                              NSD_colour  = "white",
-                             NSD_avg     = "month") {
+                             NSD_avg     = "month",
+                             nsd_range   = NULL) {
 
   if (!is.null(start))
     smps_data <- smps_data %>% filter(date >= as.POSIXct(start, tz = "UTC"))
@@ -74,6 +79,8 @@ plot_smps_banana <- function(smps_data,
   # Build y scale — optionally with a secondary NSD axis
   if (show_NSD) {
     diam_cols  <- sort(as.numeric(names(smps_data)[-1]))
+    if (!is.null(nsd_range))
+      diam_cols <- diam_cols[diam_cols >= nsd_range[1] & diam_cols <= nsd_range[2]]
     logD       <- log10(diam_cols)
     n_b        <- length(logD)
     edges      <- c(logD[1]     - (logD[2]      - logD[1])     / 2,
@@ -107,12 +114,17 @@ plot_smps_banana <- function(smps_data,
     NSD_axis_breaks <- pretty(c(NSD_lo, NSD_hi), n = 5)
     NSD_axis_breaks <- NSD_axis_breaks[NSD_axis_breaks >= NSD_lo & NSD_axis_breaks <= NSD_hi * 1.05]
 
+    nsd_label <- if (!is.null(nsd_range))
+      sprintf("N (%.0f–%.0f nm,  #/cm³)", nsd_range[1], nsd_range[2])
+    else
+      "NSD  (#/cm³)"
+
     y_scale <- scale_y_continuous(
       breaks   = log10(y_breaks),
       labels   = y_breaks,
       sec.axis = sec_axis(
         transform = ~ (. - intercept) / scale_fac,
-        name      = "NSD  (#/cm³)",
+        name      = nsd_label,
         breaks    = NSD_axis_breaks
       )
     )

@@ -218,21 +218,27 @@ read_cpc_files <- function(FF) {
             instrument = "baqs-CPC"
           )
       } else {
-        # new-site format (chilbolton, hop, marylebone): date is ISO UTC string
+        # new-site format: date is ISO UTC string.
+        # ukair files take highest priority when timestamps overlap.
+        instrument <- if (grepl("ukair", fname, ignore.case = TRUE)) "ukair-CPC" else "site-CPC"
         result[[ix]] <- df %>%
           transmute(
             date       = as.POSIXct(date, tz = "UTC"),
-            conc       = conc,
-            instrument = "site-CPC"
+            conc       = as.numeric(conc),
+            instrument = instrument
           )
       }
     }
   }
 
   out <- bind_rows(result) %>%
-          mutate(priority = if_else(instrument == "CPC-3750", 1L, 2L)) %>%
+          mutate(priority = case_when(
+            instrument == "ukair-CPC" ~ 1L,
+            instrument == "CPC-3750"  ~ 2L,
+            TRUE                      ~ 3L
+          )) %>%
           group_by(date) %>%
-          slice_min(priority, n = 1, with_ties = FALSE) %>% # selects the CPC-3750 in case there are dual observations
+          slice_min(priority, n = 1, with_ties = FALSE) %>%
           ungroup() %>%
           select(date, conc)
         

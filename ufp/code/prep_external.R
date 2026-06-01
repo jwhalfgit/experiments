@@ -72,16 +72,15 @@ prep_smps_external <- function(FF) {
     names(bin_data) <- stripped[bin_idx]
 
     # PyNSD doesn't automatically remove all 0 rows.
-    # Data from 13 Dec 2023 12:00 UTC through 31 Dec 2023 are also excluded
-    # (instrument fault / bad data period).
     tbl <- bind_cols(tibble(date = date_vec), bin_data) %>%
-      filter(!if_all(all_of(names(bin_data)), ~is.na(.x) | .x == 0)) %>%
-      filter(!(date > as.POSIXct("2023-12-13 12:00:00", tz = "UTC") &
-               date <= as.POSIXct("2023-12-31 23:59:59", tz = "UTC")))
+      filter(!if_all(all_of(names(bin_data)), ~is.na(.x) | .x == 0))
 
     if (is_maqs) {
-      # maqs SMPS is 5-minute resolution; average to 1-hour before export
+      # Exclude 13 Dec 2023 12:00 UTC – 31 Dec 2023 (maqs instrument fault).
+      # maqs SMPS is 5-minute resolution; average to 1-hour before export.
       tbl <- tbl %>%
+        filter(!(date > as.POSIXct("2023-12-13 12:00:00", tz = "UTC") &
+                 date <= as.POSIXct("2023-12-31 23:59:59", tz = "UTC"))) %>%
         mutate(date = floor_date(date, "1 hour")) %>%
         group_by(date) %>%
         summarise(across(everything(), ~mean(.x, na.rm = TRUE)), .groups = "drop") %>%
@@ -110,11 +109,13 @@ prep_smps_external <- function(FF) {
 #   datasets <- list(
 #     baqs_smps              = list.files(file.path(DATADIR, "baqs/smps/raw"),        full.names = TRUE),
 #     maqs_smps              = list.files(file.path(DATADIR, "maqs/smps/raw"),        full.names = TRUE),
-#     chilbolton_smps        = list.files(file.path(DATADIR, "chilbolton/smps/raw"),  full.names = TRUE),
-#     hop_smps_51bin         = list.files(file.path(DATADIR, "hop/smps/raw"),         full.names = TRUE, pattern = "hop_smps_20(20|21|22)|jan_feb"),
-#     hop_smps_122bin        = file.path(DATADIR,  "hop/smps/raw/hop_smps_2023_mar_onwards.csv"),
-#     marylebone_smps_51bin  = list.files(file.path(DATADIR, "marylebone/smps/raw"),  full.names = TRUE, pattern = "marylebone_smps_20(20|21|22)"),
-#     marylebone_smps_122bin = file.path(DATADIR,  "marylebone/smps/raw/marylebone_smps_2023.csv")
+#     chilbolton_smps        = list.files(file.path(DATADIR, "chilbolton/smps/"),     full.names = TRUE),
+#     hop_smps_51bin         = list.files(file.path(DATADIR, "hop/smps/"),            full.names = TRUE, pattern = "202[0-2]|2023_jan-feb"),
+#     hop_smps_122bin        = file.path(DATADIR, "hop/smps/hop_smps_2023_mar.csv"),
+#     marylebone_smps_51bin  = list.files(file.path(DATADIR, "marylebone/smps/"),     full.names = TRUE, pattern = "201[5-9]|202[0-2]"),
+#     marylebone_smps_122bin = file.path(DATADIR, "marylebone/smps/marylebone_smps_2023.csv"),
+#     harwell_smps           = list.files(file.path(DATADIR, "harwell/smps/"),        full.names = TRUE),
+#     kensington_smps        = list.files(file.path(DATADIR, "kensington/smps/"),     full.names = TRUE)
 #   )
 #   smps_dataset_summary(datasets, output_path = file.path(DATADIR, "smps_summary.csv"))
 
@@ -169,4 +170,42 @@ smps_dataset_summary <- function(datasets, output_path = NULL) {
   }
 
   invisible(result)
+}
+
+
+# write_pmp_smps_forpynsd() ---------------------------------------------------
+# Generates PyNSD-ready CSVs for all defra_pmp SMPS files (those whose name
+# contains "_smps_pmp_"). Looks in harwell, marylebone, and kensington smps/
+# directories, passes each file through prep_smps_external(), and writes the
+# result to smps/forPyNSD/<stem>.forPyNSD.csv.
+#
+# Skips files whose output already exists. Call this once after
+# prepare_new_sites.R has been run to generate the _pmp_ source files.
+#
+# Arguments:
+#   sites — character vector of site folder names to process
+
+write_pmp_smps_forpynsd <- function(sites = c("harwell", "marylebone", "kensington")) {
+  for (site in sites) {
+    smps_dir  <- file.path(DATADIR, site, "smps")
+    pmp_files <- list.files(smps_dir, pattern = "_smps_pmp_.*\\.csv$", full.names = TRUE)
+
+    if (length(pmp_files) == 0) {
+      message("  no pmp SMPS files found for: ", site)
+      next
+    }
+
+    message("\n  ", site, " — ", length(pmp_files), " file(s)")
+    results <- prep_smps_external(pmp_files)
+
+    for (nm in names(results)) {
+      outfile <- file.path(smps_dir, "forPyNSD", paste0(nm, ".forPyNSD.csv"))
+      if (file.exists(outfile)) {
+        message("  skipping (exists): ", basename(outfile))
+        next
+      }
+      write_working_csv(results[[nm]], outfile)
+    }
+  }
+  invisible(NULL)
 }

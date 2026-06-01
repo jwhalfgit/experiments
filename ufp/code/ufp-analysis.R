@@ -1,103 +1,12 @@
 # UFP Analysis file
-# this is essentially a scratch pad for using the functions in 
+# this is essentially a scratch pad for using the functions in
 # load_ufp.R
 # plot_ufp.R
 # npf_ufp.R
 
 # This will allow me to keep the function files clean.
+# CPC analysis has moved to cpc-analysis.R.
 source("sourceMeFirst_ufp.R")
-
-# CPC
-# BAQS (Birmingham) -------------------------------------------------------
-# Load BAQS SMPS and CPC
-
-ff_baqsCPC  <- find_site_files(file.path(DATADIR, "baqs", "cpc"),  
-                               pattern = "CPC")
-# baqsCPC <- read_cpc_files(ff_baqsCPC) %>%
-#   mutate(date = floor_date(date, unit = "1 hour")) %>%
-#   filter(complete.cases(.)) %>%
-#   group_by(date) %>%
-#   summarize_all(mean, na.rm = TRUE)
-# 
-# write_working_csv(baqsCPC, file.path(DATADIR, "baqs", "cpc", "baqs_cpc.csv"))
-# save(baqsCPC, file = "baqsCPC.Rds")
-load("baqsCPC.Rds")
-
-
-
-# MAQS (Manchester) -------------------------------------------------------
-# CPC: 1-minute resolution; two instrument models (CPC-3750, CPC-3772) with
-# overlapping periods — CPC-3750 takes priority (handled in read_cpc_files()).
-ff_maqsCPC  <- find_site_files(file.path(DATADIR, "maqs", "cpc"), 
-                               pattern = "CPC")
-
-# 
-# maqsCPC <- read_cpc_files(ff_maqsCPC) %>%
-#   mutate(date = floor_date(date, unit = "1 hour")) %>%
-#   filter(complete.cases(.)) %>%
-#   group_by(date) %>%
-#   summarize_all(mean, na.rm = TRUE)
-#  write_working_csv(maqsCPC, file.path(DATADIR, "maqs", "cpc", "maqs_cpc.csv"))
-# save(maqsCPC, file = "maqsCPC.Rds")
-load("maqsCPC.Rds")
-
-
-
-#############################################################################
-maqsCPC_monthly <- maqsCPC %>% 
-  mutate(mo = floor_date(date,"month")) %>% 
-  group_by(mo) %>% 
-  summarize(date = mean(mo), 
-            concMean = mean(conc,na.rm = TRUE), 
-            concSd = sd(conc,na.rm = TRUE))
-
-
-baqsCPC_monthly <- baqsCPC %>% 
-  mutate(mo = floor_date(date,"month")) %>% 
-  group_by(mo) %>% 
-  summarize(date = mean(mo), 
-            concMean = mean(conc,na.rm = TRUE), 
-            concSd = sd(conc, na.rm = TRUE))
-
-
-cpc_monthly <- bind_rows(
-  mutate(maqsCPC_monthly, site = "Manchester"),
-  mutate(baqsCPC_monthly, site = "Birmingham")
-)
-
-cpcTs <- ggplot(cpc_monthly, aes(x = date, y = concMean, colour = site, fill = site)) +
-  geom_ribbon(aes(ymin = concMean - concSd, ymax = concMean + concSd), alpha = 0.2, colour = NA) +
-  geom_line() +
-  scale_colour_manual(values = c("Manchester" = "steelblue", "Birmingham" = "tomato")) +
-  scale_fill_manual(  values = c("Manchester" = "steelblue", "Birmingham" = "tomato")) +
-  labs(x = NULL, y = "Particle concentration (#/cm³)", colour = NULL, fill = NULL) +
-  theme_minimal() +
-  theme(text = element_text(size = 22))
-
-
-cpcBoxWhisk <- bind_rows(
-  mutate(maqsCPC, site = "Manchester"),
-  mutate(baqsCPC,  site = "Birmingham")
-) %>%
-  mutate(year_mo = as.Date(floor_date(date, "month"))) %>%
-  ggplot(aes(x = year_mo, y = conc, colour = site, fill = site,
-             group = interaction(year_mo, site))) +
-  geom_boxplot(alpha = 0.3, outlier.shape = NA,
-               position = position_dodge(width = 20), width = 15) +
-  scale_x_date(date_breaks = "6 months", date_labels = "%b %Y") +
-  scale_colour_manual(values = c("Manchester" = "steelblue", "Birmingham" = "tomato")) +
-  scale_fill_manual(  values = c("Manchester" = "steelblue", "Birmingham" = "tomato")) +
-  labs(x = NULL, y = "Particle concentration (#/cm³)", colour = NULL, fill = NULL) +
-  theme_minimal() +
-  theme(text = element_text(size = 22), axis.text.x = element_text(angle = 45, hjust = 1))+
-  ylim(c(0,40000))
-
-
-cpc_ts_plot <- ggarrange(cpcTs, cpcBoxWhisk,nrow = 2, common.legend = TRUE,
-                         legend = "right")
-ggsave( file.path(PLOTDIR, "cpc_ts_plot.png"),plot = cpc_ts_plot,
-       width = 12.8, height =10.76, units = "in", bg = "white")
-
 
 # SMPS number concentration -----------------------------------------------
 
@@ -177,6 +86,31 @@ ggsave(file.path(PLOTDIR, "smps_ts_plot.png"), plot = smps_ts_plot,
 #                              quote = FALSE)})
 # 
 # 
+
+ff_chilbSMPS <- find_site_files(file.path(DATADIR, "chilbolton", "smps"))
+chilbSMPS <- prep_smps_external(ff_chilbSMPS)
+sapply(names(chilbSMPS),
+       function(x){write.csv(chilbSMPS[[x]],
+                             file = paste(x,"forPyNSD", "csv", sep = "."),
+                             row.names = FALSE,
+                             quote = FALSE)})
+
+
+ff_hopSMPS <- find_site_files(file.path(DATADIR, "hop", "smps"))
+hopSMPS <- prep_smps_external(ff_hopSMPS)
+sapply(names(hopSMPS),
+       function(x){write.csv(hopSMPS[[x]],
+                             file = paste(x,"forPyNSD", "csv", sep = "."),
+                             row.names = FALSE,
+                             quote = FALSE)})
+
+ff_maryleboneSMPS <- find_site_files(file.path(DATADIR, "marylebone", "smps"))
+maryleboneSMPS <- prep_smps_external(ff_maryleboneSMPS)
+sapply(names(maryleboneSMPS),
+       function(x){write.csv(maryleboneSMPS[[x]],
+                             file = paste(x,"forPyNSD", "csv", sep = "."),
+                             row.names = FALSE,
+                             quote = FALSE)})
 # 
 # ff_maqsSMPS_raw <- find_site_files(file.path(DATADIR, "maqs", "smps","raw"),
 #                                pattern = "SMPS")

@@ -2,6 +2,7 @@
 # and data locations.
 
 library(tidyverse)
+library(readxl)
 library(ggpubr)
 library(openair)
 
@@ -25,7 +26,7 @@ PLOTDIR <- switch(MYNAME,
                   NULL) 
 
 
-setwd(ROOT)
+setwd(file.path(ROOT, "code"))
 # Entry point: sources all component scripts in dependency order.
 # Each file can also be sourced individually after sourceMeFirst_ufp.R.
 
