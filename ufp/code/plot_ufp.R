@@ -16,34 +16,39 @@
 # upper scale limit to prevent outlier spikes from compressing the line.
 #
 # Arguments:
-#   smps_data — output of read_smps_files()
-#   title     — optional plot title string
-#   na_colour — colour for NA/zero cells (default "grey20")
-#   start     — optional start date string for time filtering (default NULL)
-#   end       — optional end date string for time filtering (default NULL)
-#   clim      — length-2 numeric vector c(min, max) for the colour scale.
-#               Values outside this range are squished to the nearest limit
-#               colour (not removed). Default c(1, 1e6).
-#   show_NSD    — overlay total NSD concentration line (default FALSE)
-#   NSD_colour  — colour of the NSD line (default "white"; use "black" for light themes)
-#   NSD_avg     — time-averaging unit for the NSD line, passed to lubridate::floor_date
-#               (e.g. "month", "week", "day", "hour"). Default "month". NULL disables
-#               averaging and plots every data point.
-#   nsd_range   — length-2 numeric c(min_nm, max_nm) restricting which bins
-#               contribute to the NSD integral. NULL (default) uses all non-NA
-#               bins. Use the intersection of all files' bin ranges for a site
-#               to make NSD comparable across bin-structure transitions.
+#   smps_data  — output of read_smps_files()
+#   title      — optional plot title string
+#   na_colour  — colour for NA/zero cells (default "grey20")
+#   start      — optional start date string for time filtering (default NULL)
+#   end        — optional end date string for time filtering (default NULL)
+#   clim       — length-2 numeric vector c(min, max) for the colour scale.
+#                Values outside this range are squished to the nearest limit
+#                colour (not removed). Default c(1, 1e6).
+#   show_NSD   — overlay SMPS-integrated number concentration line (default FALSE)
+#   NSD_colour — colour of the NSD line (default "white"; use "black" for light themes)
+#   NSD_avg    — time-averaging unit for the NSD and CPC lines, passed to
+#                lubridate::floor_date (e.g. "month", "week", "day", "hour").
+#                Default "month". NULL disables averaging.
+#   nsd_range  — length-2 numeric c(min_nm, max_nm) restricting which bins
+#                contribute to the NSD integral. NULL (default) uses all non-NA bins.
+#   cpc_data   — optional tibble with columns date (POSIXct) and conc (#/cm³)
+#                from read_cpc_files(). When provided, CPC concentrations are
+#                overlaid on the same secondary axis as the NSD line, allowing
+#                direct comparison of CPC vs SMPS-integrated N.
+#   CPC_colour — colour of the CPC line (default "red")
 
 plot_smps_banana <- function(smps_data,
-                             title     = NULL,
-                             na_colour = "grey20",
-                             start     = NULL,
-                             end       = NULL,
-                             clim      = c(1, 1e6),
-                             show_NSD    = FALSE,
-                             NSD_colour  = "white",
-                             NSD_avg     = "month",
-                             nsd_range   = NULL) {
+                             title      = NULL,
+                             na_colour  = "grey20",
+                             start      = NULL,
+                             end        = NULL,
+                             clim       = c(1, 1e6),
+                             show_NSD   = FALSE,
+                             NSD_colour = "white",
+                             NSD_avg    = "month",
+                             nsd_range  = NULL,
+                             cpc_data   = NULL,
+                             CPC_colour = "red") {
 
   if (!is.null(start))
     smps_data <- smps_data %>% filter(date >= as.POSIXct(start, tz = "UTC"))
@@ -76,56 +81,83 @@ plot_smps_banana <- function(smps_data,
   y_breaks <- candidate_breaks[candidate_breaks >= min(diams) &
                                   candidate_breaks <= max(diams)]
 
-  # Build y scale — optionally with a secondary NSD axis
-  if (show_NSD) {
-    diam_cols  <- sort(as.numeric(names(smps_data)[-1]))
-    if (!is.null(nsd_range))
-      diam_cols <- diam_cols[diam_cols >= nsd_range[1] & diam_cols <= nsd_range[2]]
-    logD       <- log10(diam_cols)
-    n_b        <- length(logD)
-    edges      <- c(logD[1]     - (logD[2]      - logD[1])     / 2,
-                    (logD[-n_b] +  logD[-1])                    / 2,
-                    logD[n_b]   + (logD[n_b]    - logD[n_b-1]) / 2)
-    data_mat   <- as.matrix(smps_data[, as.character(diam_cols)])
-    all_na     <- apply(data_mat, 1, function(r) all(is.na(r)))
-    NSD_vals     <- rowSums(sweep(data_mat, 2, diff(edges), "*"), na.rm = TRUE)
-    NSD_vals[all_na] <- NA_real_
-    NSD_ts <- tibble(date = smps_data$date, N = NSD_vals)
+  # Build y scale — secondary axis when NSD or CPC overlay requested
+  need_sec_axis <- show_NSD || !is.null(cpc_data)
 
-    if (!is.null(NSD_avg))
-      NSD_ts <- NSD_ts %>%
-        mutate(date = floor_date(date, NSD_avg)) %>%
-        group_by(date) %>%
-        summarise(N = mean(N, na.rm = TRUE), .groups = "drop") %>%
-        mutate(N = if_else(is.nan(N), NA_real_, N))
+  if (need_sec_axis) {
+    y_min <- log10(min(diams))
+    y_max <- log10(max(diams))
 
-    y_min   <- log10(min(diams))
-    y_max   <- log10(max(diams))
-    NSD_valid <- NSD_ts$N[!is.na(NSD_ts$N)]
-    NSD_lo    <- 0
-    NSD_hi    <- if (length(NSD_valid) > 0) quantile(NSD_valid, 0.99) else 1
+    # --- NSD time series ---
+    if (show_NSD) {
+      diam_cols <- sort(as.numeric(names(smps_data)[-1]))
+      if (!is.null(nsd_range))
+        diam_cols <- diam_cols[diam_cols >= nsd_range[1] & diam_cols <= nsd_range[2]]
+      logD  <- log10(diam_cols)
+      n_b   <- length(logD)
+      edges <- c(logD[1]     - (logD[2]      - logD[1])     / 2,
+                 (logD[-n_b] +  logD[-1])                    / 2,
+                 logD[n_b]   + (logD[n_b]    - logD[n_b-1]) / 2)
+      data_mat      <- as.matrix(smps_data[, as.character(diam_cols)])
+      all_na        <- apply(data_mat, 1, function(r) all(is.na(r)))
+      NSD_vals      <- rowSums(sweep(data_mat, 2, diff(edges), "*"), na.rm = TRUE)
+      NSD_vals[all_na] <- NA_real_
+      NSD_ts <- tibble(date = smps_data$date, N = NSD_vals)
+      if (!is.null(NSD_avg))
+        NSD_ts <- NSD_ts %>%
+          mutate(date = floor_date(date, NSD_avg)) %>%
+          group_by(date) %>%
+          summarise(N = mean(N, na.rm = TRUE), .groups = "drop") %>%
+          mutate(N = if_else(is.nan(N), NA_real_, N))
+    }
 
-    scale_fac <- (y_max - y_min) / (NSD_hi - NSD_lo)
-    intercept <- y_min - NSD_lo * scale_fac
+    # --- CPC time series ---
+    if (!is.null(cpc_data)) {
+      CPC_ts <- cpc_data %>%
+        filter(date >= min(smps_data$date), date <= max(smps_data$date)) %>%
+        transmute(date, N = conc)
+      if (!is.null(NSD_avg))
+        CPC_ts <- CPC_ts %>%
+          mutate(date = floor_date(date, NSD_avg)) %>%
+          group_by(date) %>%
+          summarise(N = mean(N, na.rm = TRUE), .groups = "drop") %>%
+          mutate(N = if_else(is.nan(N), NA_real_, N))
+    }
 
-    NSD_ts <- NSD_ts %>%
-      mutate(NSD_scaled = pmin(pmax(N * scale_fac + intercept, y_min), y_max))
+    # Secondary axis scale: span the 99th percentile of whichever series exist
+    sec_hi_candidates <- c(
+      if (show_NSD && length(NSD_ts$N[!is.na(NSD_ts$N)]) > 0)
+        quantile(NSD_ts$N[!is.na(NSD_ts$N)], 0.99) else NULL,
+      if (!is.null(cpc_data) && length(CPC_ts$N[!is.na(CPC_ts$N)]) > 0)
+        quantile(CPC_ts$N[!is.na(CPC_ts$N)], 0.99) else NULL
+    )
+    sec_lo  <- 0
+    sec_hi  <- if (length(sec_hi_candidates) > 0) max(sec_hi_candidates) else 1
 
-    NSD_axis_breaks <- pretty(c(NSD_lo, NSD_hi), n = 5)
-    NSD_axis_breaks <- NSD_axis_breaks[NSD_axis_breaks >= NSD_lo & NSD_axis_breaks <= NSD_hi * 1.05]
+    scale_fac <- (y_max - y_min) / (sec_hi - sec_lo)
+    intercept <- y_min - sec_lo * scale_fac
 
-    nsd_label <- if (!is.null(nsd_range))
+    scale_line <- function(ts)
+      ts %>% mutate(N_scaled = pmin(pmax(N * scale_fac + intercept, y_min), y_max))
+
+    if (show_NSD)   NSD_ts <- scale_line(NSD_ts)
+    if (!is.null(cpc_data)) CPC_ts <- scale_line(CPC_ts)
+
+    sec_breaks <- pretty(c(sec_lo, sec_hi), n = 5)
+    sec_breaks <- sec_breaks[sec_breaks >= sec_lo & sec_breaks <= sec_hi * 1.05]
+
+    sec_label <- if (!is.null(nsd_range))
       sprintf("N (%.0f–%.0f nm,  #/cm³)", nsd_range[1], nsd_range[2])
     else
-      "NSD  (#/cm³)"
+      "N  (#/cm³)"
 
     y_scale <- scale_y_continuous(
       breaks   = log10(y_breaks),
       labels   = y_breaks,
       sec.axis = sec_axis(
         transform = ~ (. - intercept) / scale_fac,
-        name      = nsd_label,
-        breaks    = NSD_axis_breaks
+        name      = sec_label,
+        breaks    = sec_breaks
       )
     )
   } else {
@@ -136,6 +168,7 @@ plot_smps_banana <- function(smps_data,
     geom_tile(aes(width = dt_sec, height = tile_h)) +
     y_scale +
     scale_fill_viridis_c(
+      option   = "turbo",
       trans    = "log10",
       limits   = clim,
       oob      = scales::squish,
@@ -147,8 +180,16 @@ plot_smps_banana <- function(smps_data,
 
   if (show_NSD)
     p <- p + geom_line(data        = NSD_ts,
-                       mapping     = aes(x = date, y = NSD_scaled),
+                       mapping     = aes(x = date, y = N_scaled),
                        colour      = NSD_colour,
+                       linewidth   = 0.6,
+                       na.rm       = TRUE,
+                       inherit.aes = FALSE)
+
+  if (!is.null(cpc_data))
+    p <- p + geom_line(data        = CPC_ts,
+                       mapping     = aes(x = date, y = N_scaled),
+                       colour      = CPC_colour,
                        linewidth   = 0.6,
                        na.rm       = TRUE,
                        inherit.aes = FALSE)
