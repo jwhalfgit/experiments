@@ -11,6 +11,10 @@
 #   modes_ts <- find_modes_timeseries(baqsSMPS)
 #   tracks   <- link_mode_tracks(modes_ts)
 #   npf      <- detect_npf_events(tracks)
+#
+# npf_prescreen() (bottom of this file) runs this same chain automatically
+# and writes its verdict into a site's NPF logbook (see npf_classify.R) as a
+# starting point for manual classification.
 
 
 # find_modes_spectrum() ---------------------------------------------------
@@ -467,4 +471,68 @@ fit_lognormals_timeseries <- function(smps_data,
     modes
   }) %>%
     select(date, mode, Dpg_nm, sigma_g, N_percm3, convergence)
+}
+
+
+# npf_prescreen() -----------------------------------------------------------
+# Runs the automatic detection chain above (find_modes_timeseries() ->
+# link_mode_tracks() -> detect_npf_events()) over a full site record and
+# writes its verdict into the auto_class column of that site's NPF logbook
+# (see npf_classify.R), so the manual classification pass in npf_classify()
+# can be prioritised by likelihood rather than worked strictly in date order.
+# The logbook must already exist (npf_logbook_init() run first) — days not
+# present in the logbook are silently skipped.
+#
+# auto_class is a rough guide only: detect_npf_events()'s "event"/"undefined"/
+# "non-event" verdict is mapped to "NPF"/"Undefined"/"Non-NPF" respectively,
+# but the manual `class` column (set by npf_classify()) is what actually
+# drives npf_summarise() and downstream analysis.
+#
+# Arguments:
+#   smps_data — tibble: date + diameter columns (full site record)
+#   site      — site key (must match npf_logbook_init()'s site)
+#   half_window, min_conc, min_prominence, top_n — forwarded to
+#     find_modes_timeseries()
+#   max_log10_jump, max_gap_steps                — forwarded to
+#     link_mode_tracks()
+#   nucl_max_diam, min_hours, min_growth_nm_hr    — forwarded to
+#     detect_npf_events()
+#
+# Returns (invisibly): the updated logbook tibble (also written to disk)
+
+npf_prescreen <- function(smps_data, site,
+                          half_window = 3, min_conc = 1, min_prominence = 0,
+                          top_n = NULL,
+                          max_log10_jump = 0.15, max_gap_steps = 2,
+                          nucl_max_diam = 25, min_hours = 2,
+                          min_growth_nm_hr = 0.5) {
+
+  message("npf_prescreen: finding modes (", site, ")...")
+  modes <- find_modes_timeseries(smps_data, half_window = half_window,
+                                 min_conc = min_conc,
+                                 min_prominence = min_prominence, top_n = top_n)
+
+  message("npf_prescreen: linking tracks...")
+  tracks <- link_mode_tracks(modes, max_log10_jump = max_log10_jump,
+                             max_gap_steps = max_gap_steps)
+
+  message("npf_prescreen: classifying days...")
+  events <- detect_npf_events(tracks, nucl_max_diam = nucl_max_diam,
+                              min_hours = min_hours,
+                              min_growth_nm_hr = min_growth_nm_hr)
+
+  auto_map <- c(event = "NPF", undefined = "Undefined", `non-event` = "Non-NPF")
+  events   <- events %>% mutate(auto_class = unname(auto_map[npf_class]))
+
+  log <- npf_logbook_read(site)
+  if (nrow(log) == 0)
+    stop("No logbook found for '", site, "' -- run npf_logbook_init() first.")
+
+  idx   <- match(events$date, log$date)
+  valid <- !is.na(idx)
+  log$auto_class[idx[valid]] <- events$auto_class[valid]
+
+  npf_logbook_write(log, site)
+  message("npf_prescreen: wrote auto_class for ", sum(valid), " day(s) (", site, ").")
+  invisible(log)
 }
