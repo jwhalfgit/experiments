@@ -26,14 +26,18 @@
 #                    Start" (DD/MM/YYYY HH:MM:SS); "_<diam>" raw-count columns
 #                    are dropped.
 #   new sites      — date column named "date"; bin columns already numeric;
-#                    (written by prepare_new_sites.R — already nearly correct).
+#                    (written by prepare_ukair_sites.R — already nearly correct).
 #
 # Arguments:
-#   FF — character vector of CSV file paths
+#   FF      — character vector of CSV file paths
+#   convert — if TRUE, divide bin values by that file's mean dlogDp to convert
+#             raw dN-per-bin counts to dN/d(log Dp) (skipped for maqs files,
+#             which are already dN/d(log Dp)). Default FALSE preserves the
+#             original raw-count behaviour used by write_pmp_smps_forpynsd().
 #
 # Returns: named list of tibbles, names are file stems (basename without ext)
 
-prep_smps_external <- function(FF) {
+prep_smps_external <- function(FF, convert = FALSE) {
 
   result <- vector("list", length(FF))
 
@@ -70,6 +74,14 @@ prep_smps_external <- function(FF) {
 
     bin_data        <- df[, bin_idx]
     names(bin_data) <- stripped[bin_idx]
+
+    if (convert && !is_maqs) {
+      # Raw dN-per-bin -> dN/d(log Dp), matching how PyNSD itself derives
+      # absolute N from the columns (mean spacing in log10-space).
+      diams  <- as.numeric(names(bin_data))
+      dlogdp <- mean(diff(log10(sort(diams))))
+      bin_data <- bin_data / dlogdp
+    }
 
     # PyNSD doesn't automatically remove all 0 rows.
     tbl <- bind_cols(tibble(date = date_vec), bin_data) %>%
@@ -173,39 +185,61 @@ smps_dataset_summary <- function(datasets, output_path = NULL) {
 }
 
 
+# write_smps_forpynsd() -------------------------------------------------------
+# Generates PyNSD-ready CSVs for the SMPS files in a single site's smps/
+# directory matching `pattern`. Passes each file through prep_smps_external()
+# and writes the result to smps/forPyNSD/<stem>.forPyNSD.csv.
+#
+# Arguments:
+#   site      — site folder name (single site; call once per site to vary
+#               pattern/convert/overwrite)
+#   pattern   — regex passed to list.files() to select source files within
+#               data/<site>/smps/ (top-level only; forPyNSD/ is a subdirectory
+#               so existing outputs are never picked up as sources)
+#   convert   — passed through to prep_smps_external() (raw dN -> dN/dlogDp)
+#   overwrite — if FALSE (default), skip files whose output already exists;
+#               if TRUE, regenerate them
+
+write_smps_forpynsd <- function(site, pattern, convert = FALSE, overwrite = FALSE) {
+  smps_dir <- file.path(DATADIR, site, "smps")
+  files    <- list.files(smps_dir, pattern = pattern, full.names = TRUE)
+
+  if (length(files) == 0) {
+    message("  no SMPS files found for: ", site)
+    return(invisible(NULL))
+  }
+
+  message("\n  ", site, " — ", length(files), " file(s)")
+  results <- prep_smps_external(files, convert = convert)
+
+  for (nm in names(results)) {
+    outfile <- file.path(smps_dir, "forPyNSD", paste0(nm, ".forPyNSD.csv"))
+    if (file.exists(outfile) && !overwrite) {
+      message("  skipping (exists): ", basename(outfile))
+      next
+    }
+    write_working_csv(results[[nm]], outfile)
+  }
+  invisible(NULL)
+}
+
+
 # write_pmp_smps_forpynsd() ---------------------------------------------------
 # Generates PyNSD-ready CSVs for all defra_pmp SMPS files (those whose name
 # contains "_smps_pmp_"). Looks in harwell, marylebone, and kensington smps/
-# directories, passes each file through prep_smps_external(), and writes the
-# result to smps/forPyNSD/<stem>.forPyNSD.csv.
+# directories. Thin wrapper around write_smps_forpynsd() (raw dN, no
+# conversion, skips existing outputs) kept for backward compatibility.
 #
-# Skips files whose output already exists. Call this once after
-# prepare_new_sites.R has been run to generate the _pmp_ source files.
+# Call this once after prepare_ukair_sites.R has been run to generate the
+# _pmp_ source files.
 #
 # Arguments:
 #   sites — character vector of site folder names to process
 
 write_pmp_smps_forpynsd <- function(sites = c("harwell", "marylebone", "kensington")) {
   for (site in sites) {
-    smps_dir  <- file.path(DATADIR, site, "smps")
-    pmp_files <- list.files(smps_dir, pattern = "_smps_pmp_.*\\.csv$", full.names = TRUE)
-
-    if (length(pmp_files) == 0) {
-      message("  no pmp SMPS files found for: ", site)
-      next
-    }
-
-    message("\n  ", site, " — ", length(pmp_files), " file(s)")
-    results <- prep_smps_external(pmp_files)
-
-    for (nm in names(results)) {
-      outfile <- file.path(smps_dir, "forPyNSD", paste0(nm, ".forPyNSD.csv"))
-      if (file.exists(outfile)) {
-        message("  skipping (exists): ", basename(outfile))
-        next
-      }
-      write_working_csv(results[[nm]], outfile)
-    }
+    write_smps_forpynsd(site, pattern = "_smps_pmp_.*\\.csv$",
+                         convert = FALSE, overwrite = FALSE)
   }
   invisible(NULL)
 }
