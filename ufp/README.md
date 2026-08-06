@@ -54,7 +54,7 @@ from ~21 nm to ~83 nm at 5.6 nm/hr over 8 traced hours (r² = 0.90).  Future wor
 
 ---
 
-## Methods (summarised by Claude Code)
+## Methods (summarised with assistance of Claude Code)
 
 **Data harmonisation.** Six SMPS instrument generations (1998–2009 Defra PMP
 TSI 3094 units, 2007+ NPL AURN instruments, the BAQS TSI-3082/3083
@@ -100,7 +100,7 @@ uses to regenerate Figure 3 above without any manual clicking.
 
 ---
 
-## Repository layout (summarised by Claude Code)
+## Repository layout (summarised with assistance of Claude Code)
 
 ```
 code/
