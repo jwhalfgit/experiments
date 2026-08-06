@@ -1,10 +1,7 @@
 # UK Ultrafine Particle (UFP) Trends
 
 Using publicly available CPC (condensation particle counter) and SMPS (scanning mobility particle sizer) data from long-term UK monitoring sites, this project is investigating long-term and short-term trends in ultrafine particle (UFP) number concentrations and size
-distributions across the UK. Instrument
-data spans **1998–2025**, with varying amounts of temporal coverage: 15 sites with CPC-only records, 6 of them also
-with concurrent SMPS size-distribution records. The project harmonises six
-different instrument generations and data formats into a common data model, which is used to visualize long-term trends, seasonal/diurnal structure, and individual
+distributions across the UK. Instrument data spans **1998–2025**, though temporal coverage varies per site. 15 sites were identified with CPC observations, six of which also have concurrent SMPS observations. The project harmonises six different instrument generations and data formats, and visualizes long-term trends, seasonal/diurnal structure, and individual
 new-particle-formation (NPF) events.
 
 ![Data coverage](figures/fig1_data_coverage.png)
@@ -26,56 +23,37 @@ Additional details in `papers/analysis_summary.md`.
 
 ## Preliminary findings
 
-**1. Widespread multi-year decline in particle number, with Marylebone the
-persistent outlier.** Annual mean CPC concentration across all 15 monitored
-sites shows a broad decline over the observational record: London Marylebone
-Rd falls from a peak of ~49,900 #/cm³ in 2001 to a 2020s baseline around
-20,000 #/cm³, while remaining the highest site in nearly every year it's
-measured. Excluding Marylebone, the PMP-era 2000s sites (Belfast, Bloomsbury,
-Manchester PCC, Glasgow, Kensington, Birmingham City Centre, Port Talbot,
-Lincoln) generally ran higher — roughly 12,000–36,000 #/cm³ — than the
-modern-instrument sites measured from 2019 onward (MAQS, HOP, BAQS,
-Chilbolton), which cluster around 4,000–13,000 #/cm³. BAQS's short
-2024–2025 record shows an uptick within that range — only two years, too
-short to treat as a genuine trend either way.
+**1. General decline in particle number concentrations.** Annual mean CPC concentration (using a Tukey filter to remove outliers) across all 15 monitored
+sites show broad declines over the observational record: London Marylebone
+Rd, a roadside monitoring site, falls from a peak of ~49,900 #/cm³ in 2001 to a 2020s baseline around
+20,000 #/cm³. While the early Particle Monitoring Program (PMP) 2000s urban background sites (Bloomsbury, Manchester Piccadilly, Glasgow, Birmingham City Centre, Port Talbot) did not operate long enough to generate significant long-term trends on a per-site basis, particle concentrations generally ran higher (roughly 12,000–28,000 #/cm³) than the more recent instrument sites measured from 2019 onward (MAQS, HOP, BAQS,
+Chilbolton), which cluster around 4,000–13,000 #/cm³. London Kensington, the longest running urban background monitoring site, is a potential throughline linking these two temporal periods, as its 2000-2008 observations are within 50% of the PMP sites, while its 2010-2018 dataset (~9,000 #/cm³) reflects the lower concentrations observed by the supersites (MAQS, BAQS, and HOP). However, further investigation would be required to definitively link trends at London Kensington to wider urban-background trends in the UK.  Rural background sites (Harwell, Chilbolton) have comparable observations with no obvious trend at either.  The behavior at Lincoln has not yet been investigated.
 
 ![Long-term trend](figures/fig2_longterm_trend.png)
 
 **2. Size-resolved decline is concentrated in the nucleation and Aitken bands.**
-At Marylebone, where the record is long enough to resolve it, the decline
-appears across nucleation (<30 nm), Aitken (30–100 nm), and accumulation
-(>100 nm) bands, with the nucleation band showing the widest interquartile
-range — consistent with its concentration being dominated by episodic
-new-particle-formation events rather than a steady background.
+At Marylebone Rd, Sen's slope trends (seasonal Mann-Kendall test on
+de-seasonalised monthly medians) show all three size bands declining
+significantly: Aitken (30–100 nm) −567 [−626, −512], nucleation (<30 nm)
+−385 [−461, −292], and accumulation (>100 nm) −187 [−207, −165] #/cm³/yr
+(all p<0.001) — nucleation and Aitken falling several times faster than
+accumulation. Aitken also carries the widest month-to-month variability of
+the three bands, consistent with its concentration being shaped by episodic
+new-particle-formation and growth events rather than a steady background.
+At London N. Kensington, Aitken and accumulation decline significantly too
+(−74 [−104, −44] and −48 [−61, −35] #/cm³/yr, both p<0.001), but nucleation
+shows no significant trend (−2 [−20, +18] #/cm³/yr) over its 2007–2020
+record — unlike Marylebone, where even the smallest particles show a clear
+long-term decline.
 
-**3. Typical fitted modal diameters** (multi-lognormal deconvolution, see
-Methods): nucleation mode ~22–25 nm, Aitken mode ~37–58 nm, accumulation mode
-~108–113 nm, fit quality r² ≈ 0.996–1.00 across sites.
+![Size-resolved trend](figures/fig4_size_bands.png)
 
-**4. New-particle-formation events, classified day-by-day, show growth
-rates of 0.5–5.6 nm/hr** across the 13 days with a fitted growth window in the
-Kensington and BAQS logbooks (454 and 363 days classified respectively, of
-which 12 are confirmed `NPF` and 1 `Undefined`). The example below —
-Kensington, 23 May 2010 — is the clearest event in either logbook: growth
-from ~21 nm to ~83 nm at 5.6 nm/hr over 8 traced hours (r² = 0.90), following
-the classic mid-morning nucleation burst.
+**3. New-particle-formation events, classified day-by-day, show growth
+rates of 0.5–5.6 nm/hr** The example below from London
+Kensington, 23 May 2010 is a clear NPF event, showing growth
+from ~21 nm to ~83 nm at 5.6 nm/hr over 8 traced hours (r² = 0.90).  Future work will identify NPF events at the operational supersites (MAQS, BAQS, and HOP) in order to understand current NPF frequencies and trends at urban background sites.
 
 ![NPF event](figures/fig3_npf_event.png)
-
-**5. Two site-level signals are flagged as likely instrument artefacts, not
-environmental change** — worth stating plainly, since knowing which results
-not to trust is as much a finding as the trends themselves:
-- **Marylebone's Aitken mode** steps from ~45 nm (pre-2009 PMP instrument) to
-  ~37 nm (post-2015 AURN instrument). STL decomposition of the modal-diameter
-  series shows a sharp discontinuity exactly at the changeover, not a gradual
-  drift, so this is treated as an instrument-generation artefact.
-- **BAQS's nucleation mode** pins to ~10.4 nm, the instrument's lower bin
-  edge, in most months — i.e. the true nucleation mode is frequently below
-  the measurable range rather than genuinely sitting at 10 nm.
-
-Two further items remain open and unresolved (see [Status](#status--open-issues)):
-a post-2022 rise in MAQS concentrations across all size bands, and uncertain
-absolute-unit calibration at Chilbolton.
 
 ---
 
@@ -148,7 +126,7 @@ code/
   npf-analysis.R                   driver: NPF classification + physics summary (interactive)
   cpc-polar-map.R                   driver: seasonal CPC-vs-wind polar plots
   ufp-polar-maps.R                   driver: seasonal CPC/SMPS-vs-wind polar plots, interactive Leaflet maps
-  readme_figures.R                    generates the three figures embedded in this README
+  readme_figures.R                    generates the four figures embedded in this README
 
   beddows/                legacy scripts, not used by the active pipeline
   ufp-analysis.R           scratch pad
@@ -168,7 +146,7 @@ setwd("code")
 source("readme_figures.R")
 ```
 
-This regenerates the three PNGs in `figures/` from cached intermediate data
+This regenerates the four PNGs in `figures/` from cached intermediate data
 (`data/cache/*.Rds`) — a few seconds' runtime, no raw CSV re-parsing. The
 underlying **measurement data are not included in this repository** (volume,
 and most of it is third-party redistributed data) — see the site table above

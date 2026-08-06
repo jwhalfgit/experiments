@@ -640,37 +640,116 @@ tukey_filter <- function(x, k = 3) {
 # Moved here from trends-analysis.R (2026-08-05) so other scripts (e.g.
 # readme_figures.R) can reuse it without sourcing that 1300-line driver.
 #
+# BUG FIX (2026-08-06): trend::sens.slope() takes a plain ts() and computes
+# each pairwise slope as (x[j]-x[i])/(j-i) -- i.e. it assumes every RETAINED
+# sample is one regular time step from the next. Feeding it a series with
+# months missing (e.g. Marylebone's ~6-year 2009-2015 SMPS outage) silently
+# compacts the gap out: index positions run 1,2,3... with no record that a
+# 6-year jump sits between two of them, so the fitted slope is calibrated
+# against a badly wrong elapsed time. Confirmed empirically on a synthetic
+# gapped series with true slope -2/unit: the compacted-index approach
+# returned -4.5, more than double. This version computes each pairwise slope
+# against the REAL elapsed time (in years) between the two dates instead.
+# The significance test and CI rank-selection are unaffected by this bug and
+# so are unchanged: trend::mk.test()'s S statistic and its variance
+# (trend:::.mkScore / trend:::.varmk) depend only on the sign/order of the
+# y-values and on n, never on how far apart the x's actually are. Only the
+# slope values entering the median (and the CI's order statistics) needed to
+# change from index-based to time-based; the CI rank-selection formula below
+# is otherwise identical to trend::sens.slope()'s internal implementation
+# (Sen 1968 / Gilbert 1987).
+#
 # Arguments:
 #   df        — tibble with a `date` column (monthly) and the value column
 #   value_col — character, name of the column to test
 #
-# Returns: tibble(slope, ci_lo, ci_hi, pval, signif) — slope and CI in units
-# per year (monthly Sen's slope * 12). NA slope/CI if fewer than 12 valid
-# months.
+# Returns: tibble(slope, ci_lo, ci_hi, pval, signif) — slope and CI already
+# in units per year. NA slope/CI if fewer than 12 valid months.
 
 theilsen_stats <- function(df, value_col) {
-  x_anom <- df %>%
+  d <- df %>%
     mutate(mon = month(date)) %>%
     group_by(mon) %>%
     mutate(anom = .data[[value_col]] - mean(.data[[value_col]], na.rm = TRUE)) %>%
     ungroup() %>%
     arrange(date) %>%
-    pull(anom)
-  x_valid <- x_anom[!is.na(x_anom)]
-  if (length(x_valid) < 12)
+    filter(!is.na(anom))
+
+  n <- nrow(d)
+  if (n < 12)
     return(tibble(slope = NA_real_, ci_lo = NA_real_, ci_hi = NA_real_,
                   pval  = NA_real_, signif = ""))
-  ts_obj <- ts(x_valid, frequency = 12)
-  ss     <- trend::sens.slope(ts_obj, conf.level = 0.95)
-  p      <- trend::mk.test(ts_obj)$p.value
+
+  x       <- d$anom
+  # units="days" is required, not optional -- as.numeric() on a POSIXct
+  # difftime silently auto-selects a unit (secs/mins/hours/days/weeks) based
+  # on the vector's smallest gap rather than its overall range, and for a
+  # monthly series (smallest gap ~1 month) it picks "secs", not "days". Found
+  # empirically this session: without an explicit unit, every slope here
+  # came back rounding to zero (off by the ~86400 seconds/day factor).
+  t_years <- as.numeric(d$date - d$date[1], units = "days") / 365.25
+
+  # Significance: rank/order-based, so computing it on the compacted (gap-
+  # free) series is valid -- it never depends on real elapsed time.
+  p <- trend::mk.test(ts(x, frequency = 12))$p.value
+
+  # Sen's slope + CI: pairwise slopes against real elapsed time, not ts()
+  # index position (see BUG FIX note above).
+  pairs   <- combn(n, 2)
+  dy      <- x[pairs[2, ]] - x[pairs[1, ]]
+  dt      <- t_years[pairs[2, ]] - t_years[pairs[1, ]]
+  d_slope <- dy / dt
+  b_sen   <- median(d_slope)
+
+  k    <- length(d_slope)
+  tt   <- table(x); names(tt) <- NULL
+  varS <- (n * (n - 1) * (2 * n + 5) - sum(tt * (tt - 1) * (2 * tt + 5))) / 18
+  Zc   <- qnorm(0.975) * sqrt(varS)
+  sorted_d <- sort(d_slope)
+  ci_lo <- sorted_d[max(1, round((k - Zc) / 2))]
+  ci_hi <- sorted_d[min(k, round((k + Zc) / 2 + 1))]
+
   tibble(
-    slope  = as.numeric(ss$estimates) * 12,
-    ci_lo  = as.numeric(ss$conf.int[1]) * 12,
-    ci_hi  = as.numeric(ss$conf.int[2]) * 12,
+    slope  = b_sen,
+    ci_lo  = ci_lo,
+    ci_hi  = ci_hi,
     pval   = p,
     signif = case_when(p < 0.001 ~ "***", p < 0.01 ~ "**",
                        p < 0.05  ~ "*",   TRUE      ~ "")
   )
+}
+
+
+# monthly_summary() ------------------------------------------------------------
+# Monthly median + Q25/Q75 IQR per (site, label) group for one value column.
+# Moved here from trends-analysis.R (2026-08-06) so it can be reused outside
+# that driver script (e.g. code/readme_figures.R). Coverage filter: >= 50% of
+# hours in the month must be present. Ribbon (IQR) is used rather than
+# discrete boxplots for readability over long (~20 year) records.
+#
+# Arguments:
+#   df               — tibble with date, site, label, and value_col columns
+#   value_col        — character, name of the column to summarise
+#   instrument_label — character, stamped onto every row as `instrument`
+#                       (lets multiple calls be bind_rows()'d and faceted/
+#                       coloured by instrument)
+#
+# Returns: tibble(site, label, month_date, N_median, N_q25, N_q75, n_hrs, instrument)
+
+monthly_summary <- function(df, value_col, instrument_label) {
+  df %>%
+    filter(!is.na(.data[[value_col]])) %>%
+    mutate(month_date = floor_date(date, "month")) %>%
+    group_by(site, label, month_date) %>%
+    summarise(
+      N_median = median(.data[[value_col]], na.rm = TRUE),
+      N_q25    = quantile(.data[[value_col]], 0.25, na.rm = TRUE),
+      N_q75    = quantile(.data[[value_col]], 0.75, na.rm = TRUE),
+      n_hrs    = n(),
+      .groups  = "drop"
+    ) %>%
+    filter(n_hrs >= 0.5 * 24 * days_in_month(month_date)) %>%
+    mutate(instrument = instrument_label)
 }
 
 

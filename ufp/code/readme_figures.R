@@ -249,4 +249,197 @@ plot_npf_day(
 )
 message("  saved fig3_npf_event.png")
 
+
+# =============================================================================
+# Figure 4 — size-resolved trend, Marylebone & Kensington (combined panels)
+# =============================================================================
+# Supports the finding that the decline is concentrated in the nucleation
+# (<30 nm) and Aitken (30-100 nm) bands, with nucleation showing the widest
+# IQR (episodic NPF events vs a steadier background) -- checked, not just
+# assumed, below. Two-panel version (one per site, stacked, free y-scale
+# since Marylebone's roadside concentrations run several times Kensington's
+# urban-background ones) of trends-analysis.R's four-site
+# size_range_monthly.png.
+#
+# Pipeline mirrors trends-analysis.R's Stage 2 exactly (outlier cap -> spline
+# -> smps_metrics() -> Tukey filter -> monthly_summary(), the last two now in
+# load_ufp.R). data/cache/marylebone_smps_raw.Rds is the list-of-tibbles
+# output of load_raw_smps(), written with saveRDS() (confirmed via magic
+# bytes) -- unlike cpc_all.Rds/the NPF caches above, a plain readRDS() works.
+
+message("Figure 4: size-resolved trend, Marylebone...")
+
+mb_smps_cache <- file.path(CACHE_DIR, "marylebone_smps_raw.Rds")
+if (!file.exists(mb_smps_cache))
+  stop("Missing ", mb_smps_cache, " -- generate via load_raw_smps() for marylebone in trends-analysis.R.")
+
+mb_raw <- readRDS(mb_smps_cache)
+
+mb_metrics <- smps_filter_outliers(mb_raw, max_dndlogdp = 1e5) %>%
+  smps_spline() %>%
+  smps_metrics() %>%
+  mutate(across(c(nuc, acc, large), ~tukey_filter(.x, k = 3)),
+         site = "marylebone", label = "London Marylebone Rd")
+
+mb_bands <- bind_rows(
+  monthly_summary(mb_metrics, "nuc",   "Nucleation (<30 nm)"),
+  monthly_summary(mb_metrics, "acc",   "Aitken (30–100 nm)"),
+  monthly_summary(mb_metrics, "large", "Accumulation (>100 nm)")
+) %>%
+  mutate(band = factor(instrument, levels = c("Nucleation (<30 nm)",
+                                              "Aitken (30–100 nm)",
+                                              "Accumulation (>100 nm)"))) %>%
+  group_by(site, label, band) %>%
+  complete(month_date = seq(min(month_date), max(month_date), by = "month")) %>%
+  ungroup()
+
+# Fixed categorical colours (dataviz skill reference palette, first 3 slots --
+# validated to clear the CVD/normal-vision floors pairwise at n=3): blue,
+# orange, aqua, assigned in fixed band order rather than ggplot's default hue
+# rotation.
+BAND_COLOURS <- c(
+  "Nucleation (<30 nm)"     = "#2a78d6",
+  "Aitken (30–100 nm)"      = "#eb6834",
+  "Accumulation (>100 nm)"  = "#1baf7a"
+)
+
+# Kensington's data, for the second panel. Kensington isn't in TREND_SITES
+# (no <site>_smps_raw.Rds cache from load_raw_smps()) -- it's the site the
+# NPF classification workflow was built around instead, so the cache here is
+# the 14 per-year data/cache/kensington_smps_npf_<year>.Rds files (2007-2020)
+# written by npf_load_site() in npf-analysis.R. Kensington's bin structure
+# never changes across the record (per SITES_NPF's comment in npf-analysis.R),
+# so unlike Marylebone this skips smps_spline() entirely; smps_metrics()
+# works directly off whatever numeric-named bin columns are present.
+#
+# NOTE: there is also a single combined data/cache/kensington_smps_npf.Rds
+# (all years in one tibble) but it predates a unit-conversion fix in
+# read_smps_files() (see the kensington/PMP comment there) -- for 2007-2008 it
+# holds pre-fix values ~75-100x too low (verified this session: median
+# ~33 #/cm3/log(nm) at the 16.55 nm bin in the combined cache vs ~2490 from a
+# fresh read of the same source CSV, matching the per-year cache). The
+# per-year caches are all dated one day later than the combined one and match
+# the fresh re-read, so they're used here instead. The combined cache is left
+# alone -- regenerating/deleting it is a separate decision, not part of this
+# figure.
+
+message("  loading Kensington SMPS data...")
+
+KENS_NPF_YEARS <- 2007:2020
+
+kens_raw <- map_dfr(KENS_NPF_YEARS, function(yr) {
+  cache_path <- file.path(CACHE_DIR, paste0("kensington_smps_npf_", yr, ".Rds"))
+  if (!file.exists(cache_path)) {
+    message("  missing ", basename(cache_path), " -- skipping year ", yr)
+    return(NULL)
+  }
+  env <- new.env()
+  load(cache_path, envir = env)
+  env[[paste0("kensington_smps_npf_", yr)]]
+}) %>%
+  distinct(date, .keep_all = TRUE) %>%
+  arrange(date)
+
+kens_metrics <- smps_filter_outliers(list(kens_raw), max_dndlogdp = 1e5)[[1]] %>%
+  smps_metrics() %>%
+  mutate(across(c(nuc, acc, large), ~tukey_filter(.x, k = 3)),
+         site = "kensington", label = "London N. Kensington")
+
+kens_bands <- bind_rows(
+  monthly_summary(kens_metrics, "nuc",   "Nucleation (<30 nm)"),
+  monthly_summary(kens_metrics, "acc",   "Aitken (30–100 nm)"),
+  monthly_summary(kens_metrics, "large", "Accumulation (>100 nm)")
+) %>%
+  mutate(band = factor(instrument, levels = c("Nucleation (<30 nm)",
+                                              "Aitken (30–100 nm)",
+                                              "Accumulation (>100 nm)"))) %>%
+  group_by(site, label, band) %>%
+  complete(month_date = seq(min(month_date), max(month_date), by = "month")) %>%
+  ungroup()
+
+# Combined: both sites' band-labelled monthly series in one long frame,
+# faceted rather than two separate images -- shares the one legend, and
+# `label` (already carried through monthly_summary()'s group_by) drives the
+# facet. free_y since Marylebone's roadside concentrations run several times
+# Kensington's urban-background ones; x stays shared so each panel's actual
+# record length reads directly off the same axis.
+size_bands_both <- bind_rows(mb_bands, kens_bands) %>%
+  mutate(label = factor(label, levels = c("London Marylebone Rd", "London N. Kensington")))
+
+# Theil-Sen trend per (label, band): Sen's slope + seasonal Mann-Kendall on
+# de-seasonalised monthly anomalies (theilsen_stats(), load_ufp.R) -- the
+# same method used by every other long-term trend plot in this project
+# (trends-analysis.R's theil_sen_size_*/mode_*/trends_* plots), so this is
+# consistent with the rest of the analysis rather than a one-off fit.
+# Requires >=12 valid months; bands that don't clear that come back with
+# slope = NA and are dropped, not given a fabricated trend.
+ts_stats_bands <- size_bands_both %>%
+  rename(date = month_date) %>%
+  group_by(label, band) %>%
+  group_modify(~theilsen_stats(.x, "N_median")) %>%
+  ungroup() %>%
+  filter(!is.na(slope)) %>%
+  mutate(stat_text = sprintf("%s: %+.0f [%+.0f, %+.0f] #/cm³/yr %s",
+                             band, slope, ci_lo, ci_hi, signif))
+
+# Trend-line segments spanning each series' own date range, anchored at its
+# median date/value -- same construction used by trends-analysis.R's custom
+# ggplot Theil-Sen plots.
+trend_segs_bands <- size_bands_both %>%
+  filter(!is.na(N_median)) %>%
+  group_by(label, band) %>%
+  summarise(t_min = min(month_date), t_max = max(month_date),
+            y_med = median(N_median, na.rm = TRUE), t_med = median(month_date),
+            .groups = "drop") %>%
+  inner_join(ts_stats_bands %>% select(label, band, slope), by = c("label", "band")) %>%
+  mutate(
+    yr_min  = as.numeric(t_min - t_med, units = "days") / 365.25,
+    yr_max  = as.numeric(t_max - t_med, units = "days") / 365.25,
+    y_start = y_med + slope * yr_min,
+    y_end   = y_med + slope * yr_max
+  )
+
+# Stacked annotation text, one line per band, colour-matched, anchored to
+# each panel's top-left corner (x=-Inf/y=Inf works despite the very different
+# y-ranges across panels under free_y) with a per-band vjust offset so the
+# (up to) three lines stack downward without overlapping.
+band_vjust <- setNames(seq_along(BAND_COLOURS) * 1.4 - 0.2, names(BAND_COLOURS))
+ts_stats_bands <- ts_stats_bands %>% mutate(vj = band_vjust[as.character(band)])
+
+p_size_bands <- ggplot(size_bands_both, aes(x = month_date, colour = band, fill = band)) +
+  geom_ribbon(aes(ymin = N_q25, ymax = N_q75), alpha = 0.15, colour = NA) +
+  geom_line(aes(y = N_median), linewidth = 0.7) +
+  geom_segment(data = trend_segs_bands,
+               aes(x = t_min, xend = t_max, y = y_start, yend = y_end),
+               linewidth = 1.1, linetype = "dashed", show.legend = FALSE) +
+  geom_text(data = ts_stats_bands,
+            aes(x = -Inf, y = Inf, label = stat_text, vjust = vj),
+            inherit.aes = TRUE, hjust = -0.05, size = 2.8, fontface = "bold",
+            show.legend = FALSE) +
+  facet_wrap(~label, ncol = 1, scales = "free_y") +
+  scale_colour_manual(values = BAND_COLOURS) +
+  scale_fill_manual(values = BAND_COLOURS) +
+  labs(x = NULL, y = "Monthly median N (#/cm³)", colour = NULL, fill = NULL,
+       title = "Size-resolved particle number trend",
+       caption = "Tukey-filtered (k=3) hourly concentrations. Ribbon: interquartile range. Coverage filter: ≥50% of hours per month.\nDashed: Sen's slope (seasonal Mann-Kendall, de-seasonalised monthly anomalies). * p<0.05, ** p<0.01, *** p<0.001 (unmarked = not significant).") +
+  theme_bw(base_size = 12) +
+  theme(legend.position = "bottom", panel.grid.minor = element_blank(),
+        strip.text = element_text(face = "bold"))
+
+ggsave(file.path(FIGDIR, "fig4_size_bands.png"), p_size_bands,
+       width = 11, height = 10, dpi = 150)
+message("  saved fig4_size_bands.png")
+
+# Check the IQR-width claim directly rather than assuming it, per site --
+# report widest band by median (Q75-Q25) width so the README text can be
+# checked against it.
+iqr_width <- size_bands_both %>%
+  mutate(iqr = N_q75 - N_q25) %>%
+  group_by(label, band) %>%
+  summarise(median_iqr = median(iqr, na.rm = TRUE), .groups = "drop") %>%
+  arrange(label, desc(median_iqr))
+message("  median monthly IQR width by band (widest first, per site):")
+for (i in seq_len(nrow(iqr_width)))
+  message(sprintf("    %-22s %-24s %.0f", iqr_width$label[i], iqr_width$band[i], iqr_width$median_iqr[i]))
+
 message("Done. Figures written to ", FIGDIR)
