@@ -634,6 +634,46 @@ tukey_filter <- function(x, k = 3) {
 }
 
 
+# theilsen_stats() ------------------------------------------------------------
+# Sen's slope + seasonal Mann-Kendall test on a monthly series, after
+# subtracting the calendar-month climatological mean (de-seasonalising).
+# Moved here from trends-analysis.R (2026-08-05) so other scripts (e.g.
+# readme_figures.R) can reuse it without sourcing that 1300-line driver.
+#
+# Arguments:
+#   df        — tibble with a `date` column (monthly) and the value column
+#   value_col — character, name of the column to test
+#
+# Returns: tibble(slope, ci_lo, ci_hi, pval, signif) — slope and CI in units
+# per year (monthly Sen's slope * 12). NA slope/CI if fewer than 12 valid
+# months.
+
+theilsen_stats <- function(df, value_col) {
+  x_anom <- df %>%
+    mutate(mon = month(date)) %>%
+    group_by(mon) %>%
+    mutate(anom = .data[[value_col]] - mean(.data[[value_col]], na.rm = TRUE)) %>%
+    ungroup() %>%
+    arrange(date) %>%
+    pull(anom)
+  x_valid <- x_anom[!is.na(x_anom)]
+  if (length(x_valid) < 12)
+    return(tibble(slope = NA_real_, ci_lo = NA_real_, ci_hi = NA_real_,
+                  pval  = NA_real_, signif = ""))
+  ts_obj <- ts(x_valid, frequency = 12)
+  ss     <- trend::sens.slope(ts_obj, conf.level = 0.95)
+  p      <- trend::mk.test(ts_obj)$p.value
+  tibble(
+    slope  = as.numeric(ss$estimates) * 12,
+    ci_lo  = as.numeric(ss$conf.int[1]) * 12,
+    ci_hi  = as.numeric(ss$conf.int[2]) * 12,
+    pval   = p,
+    signif = case_when(p < 0.001 ~ "***", p < 0.01 ~ "**",
+                       p < 0.05  ~ "*",   TRUE      ~ "")
+  )
+}
+
+
 # smps_filter_outliers() -----------------------------------------------------
 # Replaces per-bin dN/d(log Dp) values that exceed a physical plausibility cap
 # with NA. Apply to the raw list from read_smps_files() before spline
