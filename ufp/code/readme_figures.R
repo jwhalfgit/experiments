@@ -281,6 +281,27 @@ mb_metrics <- smps_filter_outliers(mb_raw, max_dndlogdp = 1e5) %>%
   mutate(across(c(nuc, acc, large), ~tukey_filter(.x, k = 3)),
          site = "marylebone", label = "London Marylebone Rd")
 
+# Instrument-fault window, April 2003 - July 2004: masked, not dropped, from
+# nuc/acc/large only. Confirmed this session by reading the raw source file
+# directly (marylebone_smps_pmp_2003.csv) -- row counts collapse from
+# ~2,400-2,900/month to 0-1,400/month starting April 2003 (several months
+# missing entirely) and stay degraded through July 2004, coincident with
+# values ~10x lower than the well-covered months on either side (nucleation
+# ~1,100-2,400 #/cm3 here vs ~10,000-19,000 in 2002 and again from Aug 2004,
+# where coverage and magnitude both recover together). A sustained
+# order-of-magnitude drop occurring together with a data-recording collapse
+# points to an instrument fault (blocked inlet / DMA or detector degradation
+# / flow fault), not a real atmospheric event. Several months in this window
+# (Oct 2003-Mar 2004, May 2004) still clear the >=50% monthly coverage filter
+# below and would otherwise pull on the ribbon and the Theil-Sen slope --
+# masked explicitly here rather than left to the coverage filter, which only
+# incidentally catches some of the window's months and not others.
+MARYLEBONE_FAULT_WINDOW <- as.POSIXct(c("2003-04-01", "2004-08-01"), tz = "UTC")
+mb_metrics <- mb_metrics %>%
+  mutate(across(c(nuc, acc, large),
+                ~if_else(date >= MARYLEBONE_FAULT_WINDOW[1] & date < MARYLEBONE_FAULT_WINDOW[2],
+                        NA_real_, .x)))
+
 mb_bands <- bind_rows(
   monthly_summary(mb_metrics, "nuc",   "Nucleation (<30 nm)"),
   monthly_summary(mb_metrics, "acc",   "Aitken (30–100 nm)"),

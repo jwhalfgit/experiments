@@ -2,7 +2,7 @@
 
 Using publicly available CPC (condensation particle counter) and SMPS (scanning mobility particle sizer) data from long-term UK monitoring sites, this project is investigating long-term and short-term trends in ultrafine particle (UFP) number concentrations and size
 distributions across the UK. Instrument data spans **1998–2025**, though temporal coverage varies per site. 15 sites were identified with CPC observations, six of which also have concurrent SMPS observations. The project harmonises six different instrument generations and data formats, and visualizes long-term trends, seasonal/diurnal structure, and individual
-new-particle-formation (NPF) events.
+new-particle-formation (NPF) events. The figures and analysis below were developed with the assistance of Claude Code.
 
 ![Data coverage](figures/fig1_data_coverage.png)
 
@@ -17,8 +17,6 @@ new-particle-formation (NPF) events.
 | Chilbolton | 2015–2024 | 2020–2023 (51→122 bins) | NPL, UK-AIR |
 | Bloomsbury, Belfast, Glasgow, Manchester PCC, Port Talbot, Tyburn, Lincoln, Birmingham City Centre | 2000–2020 (varies) | — | Defra PMP / AURN |
 
-Additional details in `papers/analysis_summary.md`.
-
 ---
 
 ## Preliminary findings
@@ -31,20 +29,19 @@ Chilbolton), which cluster around 4,000–13,000 #/cm³. London Kensington, the 
 
 ![Long-term trend](figures/fig2_longterm_trend.png)
 
-**2. Size-resolved decline is concentrated in the nucleation and Aitken bands.**
-At Marylebone Rd, Sen's slope trends (seasonal Mann-Kendall test on
+**2. Size-resolved decline is concentrated in the nucleation and Aitken size bands.**
+At Marylebone Rd, Theil-Sen's slope trends (performed on
 de-seasonalised monthly medians) show all three size bands declining
-significantly: Aitken (30–100 nm) −567 [−626, −512], nucleation (<30 nm)
-−385 [−461, −292], and accumulation (>100 nm) −187 [−207, −165] #/cm³/yr
-(all p<0.001) — nucleation and Aitken falling several times faster than
-accumulation. Aitken also carries the widest month-to-month variability of
-the three bands, consistent with its concentration being shaped by episodic
-new-particle-formation and growth events rather than a steady background.
-At London N. Kensington, Aitken and accumulation decline significantly too
+significantly: Aitken (30–100 nm) −597 [−647, −543], nucleation (<30 nm)
+−423 [−488, −349], and accumulation (>100 nm) −196 [−214, −175] #/cm³/yr
+(all p<0.001). Nucleation and Aitken size bins fall several times faster than the
+accumulation band. The Aitken sizes also carry the widest month-to-month variability of
+the three size bands, consistent with its concentration being shaped by episodic
+new-particle-formation and growth events rather than a steady background.  Meanwhile,
+at London N. Kensington, Aitken and accumulation size ranges decline significantly too
 (−74 [−104, −44] and −48 [−61, −35] #/cm³/yr, both p<0.001), but nucleation
 shows no significant trend (−2 [−20, +18] #/cm³/yr) over its 2007–2020
-record — unlike Marylebone, where even the smallest particles show a clear
-long-term decline.
+record, in contrast to Marylebone Rd. In any case, as it has been hypothesized that decreases in PM may increase concentrations of UFPs (i.e., lower concentrations of potential condensation sinks), the results from these sites require further investigation with consideration of concurrent PM2.5 and PM10 measurements, as well as chemical composition information where available.
 
 ![Size-resolved trend](figures/fig4_size_bands.png)
 
@@ -57,14 +54,14 @@ from ~21 nm to ~83 nm at 5.6 nm/hr over 8 traced hours (r² = 0.90).  Future wor
 
 ---
 
-## Methods
+## Methods (summarised by Claude Code)
 
 **Data harmonisation.** Six SMPS instrument generations (1998–2009 Defra PMP
-TSI 3094 units, 2007+ Beddows/NPL AURN instruments, the BAQS TSI-3082/3083
+TSI 3094 units, 2007+ NPL AURN instruments, the BAQS TSI-3082/3083
 system, and the MAQS TSI-3750 system) report in different units, bin
 structures, and file layouts. `read_smps_files()` detects source format by
-column signature and header content, and converts dN-per-bin sources to
-dN/d(log Dp) — the unit every other source already reports in — by dividing
+column signature and header content, and converts dN-per-bin sources to the standardised
+dN/d(log Dp) by dividing
 by the per-bin Δlog(Dp) (`code/load_ufp.R`). Every site's spectrum is then
 interpolated onto a common 64-bin log-spaced scale (10.37–964.66 nm) via
 `smooth.spline` for cross-site comparison.
@@ -78,7 +75,7 @@ year read as a full year's mean).
 
 **Trend statistics.** Long-term trends use Sen's slope with a seasonal
 Mann-Kendall significance test on monthly values, after removing the
-calendar-month climatological mean (de-seasonalising) — this prevents the
+calendar-month climatological mean (de-seasonalising). This prevents the
 annual cycle from inflating or masking the underlying slope. STL
 decomposition (Cleveland et al., 1990; `s.window=13`, `robust=TRUE`)
 separates trend from seasonal component on monthly series with data gaps
@@ -103,7 +100,7 @@ uses to regenerate Figure 3 above without any manual clicking.
 
 ---
 
-## Repository layout
+## Repository layout (summarised by Claude Code)
 
 ```
 code/
@@ -116,7 +113,7 @@ code/
   prep_external.R              library: reformats data for PyNSD compatibility
   met_load.R                    library: AURN meteorological data for polar plots
 
-  prepare_ukair_sites.R    driver: one-off harmonisation of raw AURN/NPL/Beddows/Defra-PMP sources into per-site CSVs
+  prepare_ukair_sites.R    driver: one-off harmonisation of raw AURN/NPL/Defra-PMP sources into per-site CSVs
   cpc-analysis.R            driver: all-site CPC overview, coverage audit, diurnal profiles
   trends-analysis.R          driver: long-term trend analysis — annual means, Theil-Sen, STL, modal fitting, size bands, climatologies
   smps-overview.R             driver: SMPS contour plots + per-site coverage summaries
@@ -147,7 +144,7 @@ source("readme_figures.R")
 ```
 
 This regenerates the four PNGs in `figures/` from cached intermediate data
-(`data/cache/*.Rds`) — a few seconds' runtime, no raw CSV re-parsing. The
+(`data/cache/*.Rds`). The
 underlying **measurement data are not included in this repository** (volume,
 and most of it is third-party redistributed data) — see the site table above
 for original sources: Defra UK-AIR / AURN, the National Physical Laboratory
@@ -162,11 +159,6 @@ The NPF classification workflow, multi-lognormal mode fitting, and
 condensation-sink / coagulation-sink / formation-rate physics
 (`npf_ufp.R`, `npf_physics.R`, `npf_classify.R`) are an R port of James
 Brean's [PyNSD](https://github.com/J-Brean/PyNSD), adapted to this project's
-data structures. Two deliberate departures from the PyNSD reference are
-documented inline in `npf_physics.R`: the condensation-sink sign convention
-(PyNSD's manual-panel code path is used, not its disagreeing
-`physics/condensation.py`), and per-bin rather than single-scalar Δlog(Dp)
-integration, since this project's bin widths are not perfectly uniform.
-
+data structures. 
 ---
 
