@@ -1,12 +1,10 @@
 # UK Ultrafine Particle (UFP) Trends
 
-A long-term analysis of ultrafine particle number concentrations and size
-distributions at UK monitoring sites, built in R from raw CPC (condensation
-particle counter) and SMPS (scanning mobility particle sizer) instrument
-data spanning **1998–2025**: 15 sites with CPC-only records, 6 of them also
+Using publicly available CPC (condensation particle counter) and SMPS (scanning mobility particle sizer) data from long-term UK monitoring sites, this project is investigating long-term and short-term trends in ultrafine particle (UFP) number concentrations and size
+distributions across the UK. Instrument
+data spans **1998–2025**, with varying amounts of temporal coverage: 15 sites with CPC-only records, 6 of them also
 with concurrent SMPS size-distribution records. The project harmonises six
-different instrument generations onto a common data model, then uses that to
-look at long-term trends, seasonal/diurnal structure, and individual
+different instrument generations and data formats into a common data model, which is used to visualize long-term trends, seasonal/diurnal structure, and individual
 new-particle-formation (NPF) events.
 
 ![Data coverage](figures/fig1_data_coverage.png)
@@ -15,28 +13,31 @@ new-particle-formation (NPF) events.
 |---|---|---|---|
 | Birmingham (BAQS) | 2022–2025 | 2022–2025, 61 bins, 10.4–777 nm | BAQS supersite |
 | Manchester (MAQS) | 2019–2025 | 2019–2025, ~100 bins, 15–552 nm | MAQS supersite |
-| London Marylebone Rd | 1998–2024 | 1998–2009, 2015–2023 (51→122 bins) | Defra PMP, Beddows AURN, UK-AIR |
+| London Marylebone Rd | 1998–2024 | 1998–2009, 2015–2023 (51→122 bins) | Defra PMP, AURN, UK-AIR |
 | London Honor Oak Park | 2015–2024 | 2019–2023 (51→122 bins) | NPL, UK-AIR |
 | London N. Kensington | 2000–2020 | 2007–2020, 51 bins, 16.6–604 nm | Defra PMP, UK-AIR |
-| Harwell | 1998–2020 (gap 2015–20) | 1998–2009, 2015 (51 bins) | Defra PMP, Beddows AURN, UK-AIR |
+| Harwell | 1998–2020 (gap 2015–20) | 1998–2009, 2015 (51 bins) | Defra PMP, AURN, UK-AIR |
 | Chilbolton | 2015–2024 | 2020–2023 (51→122 bins) | NPL, UK-AIR |
-| Bloomsbury, Belfast, Glasgow, Manchester PCC, Port Talbot, Tyburn, Lincoln, Birmingham City Centre | 2000–2020 (varies) | — | Defra PMP / Beddows AURN |
+| Bloomsbury, Belfast, Glasgow, Manchester PCC, Port Talbot, Tyburn, Lincoln, Birmingham City Centre | 2000–2020 (varies) | — | Defra PMP / AURN |
 
-Full detail in `papers/analysis_summary.md`.
+Additional details in `papers/analysis_summary.md`.
 
 ---
 
-## Key findings
+## Preliminary findings
 
-**1. Widespread multi-year decline in particle number, with one clear exception.**
-De-seasonalised Theil-Sen trends (seasonal Mann-Kendall) on monthly median CPC
-concentration show a statistically significant decline at Harwell
-(−259 #/cm³/yr, p<0.001) and London Marylebone Rd (Marylebone falls from
-peaks of 40,000–65,000 #/cm³ in the early 2000s to a 2020s baseline around
-20,000 #/cm³, though its longer, noisier record only reaches p≈0.06). BAQS is
-the exception: its short 2022–2025 record shows a significant *increase*
-(+1,230 #/cm³/yr, p<0.01) — treated as provisional given only ~3 years of
-data, not evidence of a genuine multi-year trend either way.
+**1. Widespread multi-year decline in particle number, with Marylebone the
+persistent outlier.** Annual mean CPC concentration across all 15 monitored
+sites shows a broad decline over the observational record: London Marylebone
+Rd falls from a peak of ~49,900 #/cm³ in 2001 to a 2020s baseline around
+20,000 #/cm³, while remaining the highest site in nearly every year it's
+measured. Excluding Marylebone, the PMP-era 2000s sites (Belfast, Bloomsbury,
+Manchester PCC, Glasgow, Kensington, Birmingham City Centre, Port Talbot,
+Lincoln) generally ran higher — roughly 12,000–36,000 #/cm³ — than the
+modern-instrument sites measured from 2019 onward (MAQS, HOP, BAQS,
+Chilbolton), which cluster around 4,000–13,000 #/cm³. BAQS's short
+2024–2025 record shows an uptick within that range — only two years, too
+short to treat as a genuine trend either way.
 
 ![Long-term trend](figures/fig2_longterm_trend.png)
 
@@ -191,11 +192,3 @@ integration, since this project's bin widths are not perfectly uniform.
 
 ---
 
-## Status / open issues
-
-| Issue | Status |
-|---|---|
-| MAQS concentration rise from ~2022, all size bands | Unresolved — real source change or instrument artefact under investigation |
-| Chilbolton SMPS absolute-unit calibration | Uncertain — diagnostic CPC-overlay comparison in place, not yet resolved |
-| Fixed-3-seed mode fitting can split one broad mode into two spurious modes | Known limitation — mode-height plots preferred over diameter plots where this matters |
-| STL trend/seasonal components across the Harwell/Marylebone 2010–2014 data gap | Linearly interpolated before decomposition — treat that stretch as modelled, not observed |

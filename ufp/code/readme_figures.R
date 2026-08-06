@@ -90,94 +90,108 @@ message("  saved fig1_data_coverage.png")
 
 
 # =============================================================================
-# Figure 2 — long-term CPC trend with Theil-Sen slopes
+# Figure 2 — long-term CPC trend, all sites on one panel
 # =============================================================================
-# Six sites with SMPS+CPC records (TREND_SITES registry, copied from
-# trends-analysis.R). Loads each site's cached raw CPC pull
-# (data/cache/<site>_cpc_raw.Rds, written by load_raw_cpc()), applies the
-# same QC as trends-analysis.R (Tukey far-out fence, >=50%-of-month coverage),
-# and fits theilsen_stats() (load_ufp.R) per site on monthly medians.
+# All 15 CPC sites, annual mean, single linear y-axis (0-based), one panel
+# coloured by site, legend at the bottom with each site's coverage year span
+# appended. Marylebone dominates the axis -- deliberately not rescaled or put
+# on a secondary axis (that was tried; across all 15 sites Marylebone is only
+# 1.4x the next-highest site, so a secondary axis buys little, unlike on the
+# 6-site SMPS+CPC subset where it's 3.9x).
+#
+# Data: data/cache/cpc_all.Rds, written with save() (not saveRDS()) by
+# cpc-analysis.R -- 15 sites, hourly, `site` column holds the display label
+# (e.g. "London Marylebone Rd"), not a short key. Loaded with load(), same as
+# cpc-polar-map.R does for the same file.
 
-message("Figure 2: long-term CPC trend...")
+message("Figure 2: long-term CPC trend, all sites...")
 
-TREND_SITES_LABELS <- c(
-  baqs       = "Birmingham (BAQS)",
-  maqs       = "Manchester (MAQS)",
-  harwell    = "Harwell",
-  hop        = "London Honor Oak Park",
-  marylebone = "London Marylebone Rd",
-  chilbolton = "Chilbolton"
+cpc_all_cache <- file.path(CACHE_DIR, "cpc_all.Rds")
+if (!file.exists(cpc_all_cache))
+  stop("Missing ", cpc_all_cache, " -- generate via the cpc_all loading block in cpc-analysis.R.")
+
+.cpc_env <- new.env()
+load(cpc_all_cache, envir = .cpc_env)
+cpc_all <- .cpc_env[["cpc_all"]]
+
+cpc_all <- cpc_all %>%
+  group_by(site) %>%
+  mutate(conc = tukey_filter(conc, k = 3)) %>%
+  ungroup()
+
+cpc_annual <- cpc_all %>%
+  filter(!is.na(conc)) %>%
+  mutate(year = year(date)) %>%
+  group_by(site, year) %>%
+  summarise(cpc_mean = mean(conc, na.rm = TRUE),
+            pct_coverage = n() / (365.25 * 24) * 100, .groups = "drop") %>%
+  filter(pct_coverage >= 25)
+
+# Legend order: descending max annual mean, so it reads in the same
+# top-to-bottom order the lines sit on the plot.
+site_rank <- cpc_annual %>%
+  group_by(site) %>% summarise(peak = max(cpc_mean), .groups = "drop") %>%
+  arrange(desc(peak)) %>% pull(site)
+cpc_annual <- cpc_annual %>% mutate(site = factor(site, levels = site_rank))
+
+# Interpolating an 8-colour Set2 palette up to 15 categories produces several
+# near-duplicate muted tones, and colorspace's built-in qualitative palettes
+# (e.g. "Dark 3") stay too close in chroma/luminance to separate reliably at
+# 15 levels too. Full-chroma (c=100), mid-luminance (l=60) hues spaced evenly
+# around the whole wheel hold up much better -- see also the year-span legend
+# labels below, a second (non-colour) cue for telling similar hues apart.
+#
+# Sites with similar peak concentration land at adjacent ranks (site_rank is
+# ordered by peak), so assigning hues in that same order puts visually/
+# temporally similar sites next to each other on the hue wheel too --
+# compounding rather than counteracting the confusion. Instead the hue
+# sequence is assigned via a fixed step through the wheel (step size ~n/2,
+# coprime with n so it still cycles through every hue exactly once) so that
+# rank-neighbours land roughly opposite each other in hue.
+n_sites  <- length(site_rank)
+hue_step <- (n_sites %/% 2) + 1
+hue_order <- ((seq_len(n_sites) - 1) * hue_step) %% n_sites + 1
+site_colours <- setNames(
+  colorspace::qualitative_hcl(n_sites, c = 100, l = 60)[hue_order],
+  site_rank
 )
 
-cpc_sites <- imap(TREND_SITES_LABELS, function(label, site_name) {
-  cache_path <- file.path(CACHE_DIR, paste0(site_name, "_cpc_raw.Rds"))
-  if (!file.exists(cache_path)) {
-    message("  no cached CPC data for ", site_name, " -- skipping (run trends-analysis.R Stage 1 first)")
-    return(NULL)
-  }
-  readRDS(cache_path) %>%
-    mutate(date = floor_date(date, "1 hour")) %>%
-    group_by(date) %>%
-    summarise(cpc = mean(conc, na.rm = TRUE), .groups = "drop") %>%
-    mutate(site = site_name, label = label)
-}) %>% compact() %>% bind_rows()
-
-cpc_sites <- cpc_sites %>%
+# Legend labels get each site's coverage year span appended, since several
+# colours are still close enough (15 categories) that the span is a useful
+# second cue for telling two similar-hued lines apart.
+site_years <- cpc_annual %>%
   group_by(site) %>%
-  mutate(cpc = tukey_filter(cpc, k = 3)) %>%
-  ungroup()
+  summarise(yr_min = min(year), yr_max = max(year), .groups = "drop") %>%
+  mutate(site = as.character(site))
 
-cpc_monthly <- cpc_sites %>%
-  mutate(month_date = floor_date(date, "month")) %>%
-  group_by(site, label, month_date) %>%
-  summarise(cpc_median = median(cpc, na.rm = TRUE), n_hrs = n(), .groups = "drop") %>%
-  filter(n_hrs >= 0.5 * 24 * days_in_month(month_date)) %>%
-  group_by(site, label) %>%
-  complete(month_date = seq(min(month_date), max(month_date), by = "month")) %>%
-  ungroup()
+site_label_lookup <- setNames(
+  paste0(site_years$site, " (", site_years$yr_min, "–", site_years$yr_max, ")"),
+  site_years$site
+)
 
-ts_stats <- cpc_monthly %>%
-  filter(!is.na(cpc_median)) %>%
-  rename(date = month_date) %>%
-  group_by(site, label) %>%
-  group_modify(~theilsen_stats(.x, "cpc_median")) %>%
-  ungroup() %>%
-  filter(!is.na(slope)) %>%
-  mutate(stat_text = sprintf("%.0f [%.0f, %.0f] #/cm³/yr %s", slope, ci_lo, ci_hi, signif))
+cpc_annual <- cpc_annual %>%
+  mutate(site_label = factor(site_label_lookup[as.character(site)],
+                             levels = site_label_lookup[site_rank]))
 
-trend_segs <- cpc_monthly %>%
-  filter(!is.na(cpc_median)) %>%
-  group_by(site, label) %>%
-  summarise(t_min = min(month_date), t_max = max(month_date),
-            y_med = median(cpc_median), t_med = median(month_date), .groups = "drop") %>%
-  left_join(ts_stats %>% select(site, label, slope), by = c("site", "label")) %>%
-  filter(!is.na(slope)) %>%
-  mutate(
-    yr_min  = as.numeric(t_min - t_med, units = "days") / 365.25,
-    yr_max  = as.numeric(t_max - t_med, units = "days") / 365.25,
-    y_start = y_med + slope * yr_min,
-    y_end   = y_med + slope * yr_max
-  )
+site_colours_labelled <- setNames(site_colours, site_label_lookup[names(site_colours)])
 
-label_pos <- ts_stats %>% select(site, label, stat_text)
-
-p_trend <- ggplot(cpc_monthly %>% filter(!is.na(cpc_median)),
-                  aes(x = month_date, y = cpc_median)) +
-  geom_point(size = 0.7, colour = "steelblue3", alpha = 0.6) +
-  geom_segment(data = trend_segs,
-               aes(x = t_min, xend = t_max, y = y_start, yend = y_end),
-               colour = "red", linewidth = 1, inherit.aes = FALSE) +
-  geom_text(data = label_pos, aes(x = -Inf, y = Inf, label = stat_text),
-            inherit.aes = FALSE, hjust = -0.05, vjust = 1.5, size = 3, colour = "black") +
-  facet_wrap(~label, scales = "free_y") +
-  labs(x = NULL, y = "Monthly median CPC (#/cm³)",
-       title = "Long-term ultrafine particle number trend (de-seasonalised Theil-Sen)",
-       caption = "Points: monthly median (≥50% hourly coverage). Red: Sen's slope. Seasonal Mann-Kendall significance: * p<0.05, ** p<0.01, *** p<0.001.") +
+p_trend <- ggplot(cpc_annual, aes(x = year, y = cpc_mean, colour = site_label,
+                                  linetype = site == "London Marylebone Rd",
+                                  linewidth = site == "London Marylebone Rd")) +
+  geom_line() +
+  geom_point(size = 1.3) +
+  scale_y_continuous(labels = scales::label_comma(), limits = c(0, NA)) +
+  scale_colour_manual(values = site_colours_labelled) +
+  scale_linetype_manual(values = c(`TRUE` = "dashed", `FALSE` = "solid"), guide = "none") +
+  scale_linewidth_manual(values = c(`TRUE` = 1.1, `FALSE` = 0.6), guide = "none") +
+  labs(x = NULL, y = "Annual mean CPC (#/cm³)", colour = NULL,
+       title = "Long-term ultrafine particle number trend, all sites",
+       caption = "Annual mean, sites with ≥25% hourly coverage in a year.") +
   theme_bw(base_size = 12) +
-  theme(strip.text = element_text(face = "bold"))
+  theme(legend.position = "bottom", legend.text = element_text(size = 8)) +
+  guides(colour = guide_legend(nrow = 5, byrow = TRUE))
 
-ggsave(file.path(FIGDIR, "fig2_longterm_trend.png"), p_trend,
-       width = 12, height = 8, dpi = 150)
+ggsave(file.path(FIGDIR, "fig2_longterm_trend.png"), p_trend, width = 12, height = 8, dpi = 150)
 message("  saved fig2_longterm_trend.png")
 
 
